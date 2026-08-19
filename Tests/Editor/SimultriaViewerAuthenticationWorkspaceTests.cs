@@ -16,12 +16,15 @@ namespace Deucarian.SimultriaViewerConnection.Tests
     public sealed class SimultriaViewerAuthenticationWorkspaceTests
     {
         private IDisposable hostSuspension;
+        private SimultriaApiProfile configuredLegacyProfile;
+        private ApiEnvironmentProfile configuredDevelopmentEnvironment;
 
         [SetUp]
         public void SetUp()
         {
             hostSuspension =
                 SimultriaViewerEditorAuthenticationHost.SuspendForTests();
+            configuredLegacyProfile = CreateConfiguredLegacyProfile();
         }
 
         [TearDown]
@@ -29,13 +32,17 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         {
             hostSuspension?.Dispose();
             hostSuspension = null;
+            UnityEngine.Object.DestroyImmediate(configuredLegacyProfile);
+            UnityEngine.Object.DestroyImmediate(
+                configuredDevelopmentEnvironment);
+            configuredLegacyProfile = null;
+            configuredDevelopmentEnvironment = null;
         }
 
         [Test]
         public void ExplicitEnvironmentRegistrationUsesStableSingleViewerIdentity()
         {
-            SimultriaApiProfile apiProfile =
-                SimultriaApiProfileDefaults.Load();
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
             ViewerAuthenticationSession session =
                 ViewerAuthenticationSession.CreateTransient();
             IDisposable registration = null;
@@ -71,10 +78,111 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void GenericConnectionProfileUsesTheSameStableRegistration()
+        {
+            ApiConnectionProfile connectionProfile =
+                CreateGenericConnectionProfile();
+            ViewerAuthenticationSession session =
+                ViewerAuthenticationSession.CreateTransient();
+            IDisposable registration = null;
+            try
+            {
+                bool registered =
+                    SimultriaViewerConnectionAuthentication.TryRegister(
+                        connectionProfile,
+                        SimultriaEnvironmentIds.Development,
+                        session,
+                        out registration,
+                        out ApiEnvironmentStatus environment,
+                        out string error);
+
+                Assert.That(registered, Is.True, error);
+                Assert.That(environment.IsResolved, Is.True);
+                Assert.That(
+                    ViewerAuthenticationTargetRegistry.TryGet(
+                        SimultriaViewerConnectionAuthentication
+                            .DefaultTargetId,
+                        out ViewerAuthenticationTarget target),
+                    Is.True);
+                Assert.That(target.Session, Is.SameAs(session));
+                Assert.That(
+                    SimultriaViewerConnectionAuthentication.TryValidateTarget(
+                        target,
+                        connectionProfile,
+                        SimultriaEnvironmentIds.Development,
+                        out string validationError),
+                    Is.True,
+                    validationError);
+            }
+            finally
+            {
+                registration?.Dispose();
+                UnityEngine.Object.DestroyImmediate(connectionProfile);
+            }
+        }
+
+        [Test]
+        public void DevelopmentProfilePrefersAssignedGenericConnection()
+        {
+            ApiConnectionProfile connectionProfile =
+                CreateGenericConnectionProfile();
+            var developmentProfile =
+                ScriptableObject.CreateInstance<
+                    SimultriaViewerDevelopmentProfile>();
+            developmentProfile.ConnectionProfileReference = connectionProfile;
+            developmentProfile.ApiProfileReference =
+                configuredLegacyProfile;
+            developmentProfile.EnvironmentId =
+                SimultriaEnvironmentIds.Development;
+            ViewerAuthenticationSession session =
+                ViewerAuthenticationSession.CreateTransient();
+            IDisposable registration = null;
+            try
+            {
+                Assert.That(
+                    developmentProfile.EffectiveProfileReference,
+                    Is.SameAs(connectionProfile));
+                Assert.That(
+                    developmentProfile.EffectiveApiProfile,
+                    Is.Null,
+                    "Legacy callers must not silently ignore the generic profile.");
+                Assert.That(
+                    SimultriaViewerConnectionAuthentication.TryRegister(
+                        developmentProfile,
+                        session,
+                        out registration,
+                        out _,
+                        out string registrationError),
+                    Is.True,
+                    registrationError);
+                Assert.That(
+                    ViewerAuthenticationTargetRegistry.TryGet(
+                        SimultriaViewerConnectionAuthentication
+                            .DefaultTargetId,
+                        out ViewerAuthenticationTarget target),
+                    Is.True);
+                Assert.That(
+                    SimultriaViewerConnectionAuthentication.TryValidateTarget(
+                        target,
+                        developmentProfile,
+                        SimultriaEnvironmentIds.Development,
+                        out string validationError),
+                    Is.True,
+                    validationError);
+            }
+            finally
+            {
+                registration?.Dispose();
+                UnityEngine.Object.DestroyImmediate(developmentProfile);
+                UnityEngine.Object.DestroyImmediate(connectionProfile);
+            }
+        }
+
+        [Test]
         public void RuntimeProviderCreatesOneStableSharedSessionAndApiClient()
         {
             var provider = new SimultriaViewerRuntimeConnectionProvider(
-                SimultriaApiProfileDefaults.Load(),
+                configuredLegacyProfile,
                 SimultriaEnvironmentIds.Development);
             ViewerRuntimeConnection connection = null;
             try
@@ -119,6 +227,86 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void RuntimeProviderAcceptsExplicitGenericConnectionProfile()
+        {
+            ApiConnectionProfile connectionProfile =
+                CreateGenericConnectionProfile();
+            var provider = new SimultriaViewerRuntimeConnectionProvider(
+                connectionProfile,
+                SimultriaEnvironmentIds.Development);
+            ViewerRuntimeConnection connection = null;
+            try
+            {
+                bool created = provider.TryCreate(
+                    out connection,
+                    out string error);
+
+                Assert.That(created, Is.True, error);
+                Assert.That(connection, Is.Not.Null);
+                Assert.That(
+                    connection.ApiBaseUrl,
+                    Is.EqualTo("https://simultria-viewer.invalid"));
+                Assert.That(
+                    ViewerAuthenticationTargetRegistry.TryGet(
+                        connection.TargetId,
+                        out ViewerAuthenticationTarget target),
+                    Is.True);
+                Assert.That(target.Session, Is.SameAs(connection.Session));
+            }
+            finally
+            {
+                connection?.Dispose();
+                UnityEngine.Object.DestroyImmediate(connectionProfile);
+            }
+        }
+
+        [Test]
+        public void BlankPackageDefaultLeavesRuntimeProviderRegistryEmpty()
+        {
+            Assert.That(
+                SimultriaViewerRuntimeConnectionBootstrap
+                    .TryRegisterDefaultProvider(),
+                Is.False,
+                "A package default without a host must not claim the " +
+                "fail-closed runtime registry.");
+
+            ViewerRuntimeConnectionResolution resolution =
+                ViewerRuntimeConnectionProviderRegistry.Resolve();
+            Assert.That(
+                resolution.Status,
+                Is.EqualTo(ViewerRuntimeConnectionResolutionStatus.None));
+            Assert.That(resolution.Connection, Is.Null);
+        }
+
+        [Test]
+        public void RuntimeProviderTypedNullProfilesFailCleanly()
+        {
+            ApiConnectionProfile connectionProfile = null;
+            SimultriaApiProfile legacyProfile = null;
+            var genericProvider =
+                new SimultriaViewerRuntimeConnectionProvider(
+                    connectionProfile,
+                    SimultriaEnvironmentIds.Development);
+            var legacyProvider =
+                new SimultriaViewerRuntimeConnectionProvider(
+                    legacyProfile,
+                    SimultriaEnvironmentIds.Development);
+
+            Assert.That(
+                genericProvider.TryCreate(out _, out string genericError),
+                Is.False);
+            Assert.That(
+                genericError,
+                Does.Contain("connection profile"));
+            Assert.That(
+                legacyProvider.TryCreate(out _, out string legacyError),
+                Is.False);
+            Assert.That(
+                legacyError,
+                Does.Contain("connection profile"));
+        }
+
+        [Test]
         public void ArbitraryStableIdTargetCannotSupplySimultriaBearer()
         {
             IDisposable registration =
@@ -142,8 +330,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void RuntimeDevelopmentBindingRejectsDifferentSelectedEnvironment()
         {
-            SimultriaApiProfile apiProfile =
-                SimultriaApiProfileDefaults.Load();
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
             ViewerAuthenticationSession session =
                 ViewerAuthenticationSession.CreateTransient();
             var selectedProfile =
@@ -185,7 +372,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         public void RegistrationRejectsStructurallyEqualButDifferentSelectedProfile()
         {
             SimultriaApiProfile registeredProfile =
-                SimultriaApiProfileDefaults.Load();
+                configuredLegacyProfile;
             SimultriaApiProfile selectedApiProfile =
                 SimultriaApiProfile.CreateTransient(
                     registeredProfile.Environments,
@@ -259,8 +446,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void EditorLeaseYieldsToRuntimeTargetAndRestoresAfterItLeaves()
         {
-            SimultriaApiProfile apiProfile =
-                SimultriaApiProfileDefaults.Load();
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
             var ownerRebinds = new List<string>();
             var lease = new SimultriaViewerEditorAuthenticationLease(
                 () => new SimultriaViewerEditorAuthenticationConfiguration(
@@ -330,8 +516,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void EditorLeaseDoesNotRequireProjectOrModelContext()
         {
-            SimultriaApiProfile apiProfile =
-                SimultriaApiProfileDefaults.Load();
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
             var lease = new SimultriaViewerEditorAuthenticationLease(
                 () => new SimultriaViewerEditorAuthenticationConfiguration(
                     apiProfile,
@@ -352,10 +537,34 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void EditorLeaseAcceptsGenericConnectionConfiguration()
+        {
+            ApiConnectionProfile connectionProfile =
+                CreateGenericConnectionProfile();
+            var lease = new SimultriaViewerEditorAuthenticationLease(
+                () => new SimultriaViewerEditorAuthenticationConfiguration(
+                    connectionProfile,
+                    SimultriaEnvironmentIds.Development));
+            try
+            {
+                lease.Reconcile(suspendForPlayMode: false);
+
+                Assert.That(lease.IsRegistered, Is.True);
+                Assert.That(
+                    ViewerAuthenticationTargetRegistry.Targets.Count,
+                    Is.EqualTo(1));
+            }
+            finally
+            {
+                lease.Dispose();
+                UnityEngine.Object.DestroyImmediate(connectionProfile);
+            }
+        }
+
+        [Test]
         public void FailedEditorRegistrationRetriesBeforeRebindingOwner()
         {
-            SimultriaApiProfile apiProfile =
-                SimultriaApiProfileDefaults.Load();
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
             int attempts = 0;
             var ownerRebinds = new List<string>();
             var lease = new SimultriaViewerEditorAuthenticationLease(
@@ -430,6 +639,47 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             {
                 throw new InvalidOperationException("Subscriber failed.");
             }
+        }
+
+        private ApiConnectionProfile CreateGenericConnectionProfile()
+        {
+            return ApiConnectionProfile.CreateTransient(
+                configuredLegacyProfile.Environments,
+                configuredLegacyProfile.EndpointCatalog,
+                SimultriaEnvironmentDescriptors.Standard);
+        }
+
+        private SimultriaApiProfile CreateConfiguredLegacyProfile()
+        {
+            SimultriaApiProfile packageProfile =
+                SimultriaApiProfileDefaults.Load();
+            Assert.That(packageProfile, Is.Not.Null);
+            var environments = new List<ApiEnvironmentProfile>();
+            foreach (ApiEnvironmentProfile source in
+                     packageProfile.Environments)
+            {
+                if (source == null ||
+                    !source.TryGetId(out var environmentId) ||
+                    environmentId != SimultriaEnvironmentIds.Development)
+                {
+                    environments.Add(source);
+                    continue;
+                }
+
+                configuredDevelopmentEnvironment =
+                    UnityEngine.Object.Instantiate(source);
+                Assert.That(
+                    configuredDevelopmentEnvironment.TryGetClient(
+                        SimultriaClientIds.Primary,
+                        out ApiNamedClientDefinition client),
+                    Is.True);
+                client.BaseUrl = "https://simultria-viewer.invalid";
+                environments.Add(configuredDevelopmentEnvironment);
+            }
+
+            return SimultriaApiProfile.CreateTransient(
+                environments,
+                packageProfile.EndpointCatalog);
         }
     }
 }
