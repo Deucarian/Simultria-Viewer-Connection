@@ -1,0 +1,25 @@
+{
+  "name": "Deucarian.SimultriaViewerConnection.Editor",
+  "rootNamespace": "Deucarian.SimultriaViewerConnection.Editor",
+  "references": [
+    "Deucarian.API",
+    "Deucarian.CommandRouting",
+    "Deucarian.Editor",
+    "Deucarian.Logging",
+    "Deucarian.Simultria.API",
+    "Deucarian.SimultriaViewerConnection",
+    "Deucarian.ViewerAuthentication",
+    "Newtonsoft.Json"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
