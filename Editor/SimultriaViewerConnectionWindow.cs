@@ -63,7 +63,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                     DeucarianEditorChrome.DrawFooterVersion(
                         "Simultria Viewer Connection",
-                        "0.1.0");
+                "0.2.0");
                 }
 
                 GUILayout.Space(12f);

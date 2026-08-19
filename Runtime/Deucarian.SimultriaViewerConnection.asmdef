@@ -4,6 +4,7 @@
   "references": [
     "Deucarian.API",
     "Deucarian.CommandRouting",
+    "Deucarian.Session",
     "Deucarian.Simultria.API",
     "Deucarian.ViewerAuthentication",
     "Newtonsoft.Json"
