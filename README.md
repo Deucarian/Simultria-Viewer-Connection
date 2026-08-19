@@ -23,8 +23,8 @@ Install the stable package branch in a Simultria-backed viewer:
 "com.deucarian.simultria-viewer-connection": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
 ```
 
-Required package versions are declared in `package.json`, including API 1.2.0,
-  Simultria API 0.1.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
+Required package versions are declared in `package.json`, including API 1.4.2,
+Simultria API 0.3.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
 
 ## Development profile
 
@@ -34,8 +34,10 @@ Create a profile from:
 
 The profile stores only:
 
-- optional serializable `ApiEnvironmentId` and/or `SimultriaApiProfile`
-  reference (the package default is used when the reference is empty);
+- optional serializable `ApiEnvironmentId` and a project-owned generic
+  `ApiConnectionProfile` reference;
+- a legacy `SimultriaApiProfile` reference retained for existing serialized
+  assets (the package default is used only when both references are empty);
 - project, model, and optional model-version IDs;
 - placement position, rotation, and scale;
 - the development-only force-show option; and
@@ -44,6 +46,14 @@ The profile stores only:
 It has no base URL, access token, credentials, login/validation route, Report
 marker/media/command data, or historical `is_default_context` flag. Secret-like
 metadata keys are rejected recursively.
+
+Create the referenced connection from:
+
+`Assets > Create > Deucarian > Simultria > API Profile`
+
+Then enter each environment host in that asset's inspector. The Simultria
+factory supplies the four blank slots and API v2 catalog; it supplies no
+deployment URL and never copies one into the development profile.
 
 Open `Tools > Deucarian > Viewer > Simultria Connection` to select one project
 default. That selection is stored in:
@@ -171,20 +181,38 @@ environment through Simultria API, creates one
 `SimultriaViewerAuthenticationProvider`, and registers that same provider for
 generic acquisition and server validation in Viewer Authentication.
 
-When this optional package is present at runtime, it also registers one
-`IViewerRuntimeConnectionProvider` factory. It creates no live authentication
-target unless a generic viewer resolves the provider. The resulting lease owns
-the stable `simultria-viewer` session, an API client backed by that exact
-session, the resolved Simultria API base URL, and its exact authenticated
-origin. Generic templates can therefore load the bearer-required model URL
-without a local endpoint asset or a Template-to-Simultria dependency.
+The package default contains no deployment host, so merely installing this
+package does not claim the fail-closed runtime provider registry. A project or
+coupling package that uses the generic runtime can explicitly register its
+project-owned connection profile:
+
+```csharp
+IDisposable runtimeProviderRegistration =
+    ViewerRuntimeConnectionProviderRegistry.Register(
+        new SimultriaViewerRuntimeConnectionProvider(
+            apiConnectionProfile,
+            environmentId));
+```
+
+The provider creates no live authentication target until a generic viewer
+resolves it. The resulting lease owns the stable `simultria-viewer` session,
+an API client backed by that exact session, the profile-resolved API base URL,
+and its exact authenticated origin. Dispose the registration with the owning
+composition. Existing installations with a configured legacy package default
+retain automatic registration; blank defaults deliberately leave consumer
+fallback available.
+
+The legacy `SimultriaApiProfile` constructor and registration overloads remain
+available. Because the generic and legacy profile types are unrelated
+overloads, pass a typed profile variable (or an explicit cast) rather than a
+bare `null` literal when testing missing configuration.
 
 Single-viewer runtimes should use the overload without target strings so Edit
 Mode and Play Mode keep the same stable identity:
 
 ```csharp
 SimultriaViewerConnectionAuthentication.TryRegister(
-    simultriaApiProfile,
+    apiConnectionProfile,
     environmentId,
     authenticationSession,
     out IDisposable authenticationRegistration,
@@ -192,8 +220,8 @@ SimultriaViewerConnectionAuthentication.TryRegister(
     out string error);
 ```
 
-This explicit API-profile/environment overload does not require a development
-project/model profile. Existing products migrating from another target ID
+This explicit connection-profile/environment overload does not require a
+development project/model profile. Existing products migrating from another target ID
 should switch to the stable package identity; the package includes the guarded
 one-time `report-viewer` owner migration. Multi-viewer products may use the
 explicit target-ID overload but do not participate in that migration.

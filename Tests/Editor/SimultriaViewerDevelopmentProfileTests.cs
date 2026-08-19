@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Deucarian.API.Configuration;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API.Configuration;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -55,7 +58,62 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
-        public void SerializedProfileHasNoLegacyOrSensitiveFields()
+        public void ResolvesAssignedGenericConnectionProfile()
+        {
+            SimultriaApiProfile legacyProfile =
+                SimultriaApiProfileDefaults.Load();
+            Assert.That(legacyProfile, Is.Not.Null);
+            ApiEnvironmentProfile configuredDevelopment = null;
+            var environments = new List<ApiEnvironmentProfile>();
+            foreach (ApiEnvironmentProfile source in legacyProfile.Environments)
+            {
+                if (source == null ||
+                    !source.TryGetId(out var environmentId) ||
+                    environmentId != SimultriaEnvironmentIds.Development)
+                {
+                    environments.Add(source);
+                    continue;
+                }
+
+                configuredDevelopment = Object.Instantiate(source);
+                Assert.That(
+                    configuredDevelopment.TryGetClient(
+                        SimultriaClientIds.Primary,
+                        out ApiNamedClientDefinition client),
+                    Is.True);
+                client.BaseUrl = "https://simultria-viewer.invalid";
+                environments.Add(configuredDevelopment);
+            }
+
+            ApiConnectionProfile connectionProfile =
+                ApiConnectionProfile.CreateTransient(
+                    environments,
+                    legacyProfile.EndpointCatalog,
+                    SimultriaEnvironmentDescriptors.Standard);
+            try
+            {
+                profile.ConnectionProfileReference = connectionProfile;
+
+                Assert.That(
+                    profile.TryResolveEnvironment(
+                        out var status,
+                        out string error),
+                    Is.True,
+                    error);
+                Assert.That(status.IsResolved, Is.True, status.Message);
+                Assert.That(
+                    profile.EffectiveProfileReference,
+                    Is.SameAs(connectionProfile));
+            }
+            finally
+            {
+                Object.DestroyImmediate(connectionProfile);
+                Object.DestroyImmediate(configuredDevelopment);
+            }
+        }
+
+        [Test]
+        public void SerializedProfileKeepsOnlySafeConnectionCompatibility()
         {
             string[] fieldNames = typeof(SimultriaViewerDevelopmentProfile)
                 .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -70,6 +128,13 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             Assert.That(fieldNames.Any(name => name.Contains("login")), Is.False);
             Assert.That(fieldNames.Any(name => name.Contains("report")), Is.False);
             Assert.That(fieldNames.Any(name => name.Contains("media")), Is.False);
+            Assert.That(
+                fieldNames,
+                Does.Contain("apiconnectionprofilereference"));
+            Assert.That(
+                fieldNames,
+                Does.Contain("apiprofilereference"),
+                "The legacy serialized reference must remain readable.");
         }
     }
 }

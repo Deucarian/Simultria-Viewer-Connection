@@ -218,7 +218,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
                     authenticationTarget,
-                    profile.EffectiveApiProfile,
+                    profile,
                     profile.EnvironmentId,
                     out string authenticationError))
             {
@@ -227,14 +227,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     authenticationError);
             }
 
-            if (profile.EffectiveApiProfile == null)
-            {
-                return LiveCommandPreparation.Failure(
-                    "api_composition_unavailable",
-                    "The package-provided Simultria API profile is missing.");
-            }
-
-            if (!profile.EffectiveApiProfile.TryCreateComposition(
+            if (!profile.TryCreateComposition(
                     out ApiComposition composition,
                     out string compositionError))
             {

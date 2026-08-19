@@ -1,4 +1,5 @@
 using System;
+using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
@@ -19,6 +20,14 @@ namespace Deucarian.SimultriaViewerConnection
     {
         [SerializeField] private ApiEnvironmentId environmentId =
             SimultriaEnvironmentIds.Development;
+        [Tooltip(
+            "Project-owned generic API connection. Hosts remain editable " +
+            "in that asset and are never stored in this development profile.")]
+        [SerializeField] private ApiConnectionProfile
+            apiConnectionProfileReference;
+        [Tooltip(
+            "Legacy Simultria API profile reference retained for existing " +
+            "serialized assets. New profiles should use API Connection Profile.")]
         [SerializeField] private SimultriaApiProfile apiProfileReference;
         [SerializeField] private int projectId;
         [SerializeField] private int modelId;
@@ -39,8 +48,17 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         /// <summary>
-        /// Optional Simultria API composition asset. The running viewer may
-        /// provide its own composition when this reference is absent.
+        /// Preferred project-owned generic API connection profile.
+        /// </summary>
+        public ApiConnectionProfile ConnectionProfileReference
+        {
+            get => apiConnectionProfileReference;
+            set => apiConnectionProfileReference = value;
+        }
+
+        /// <summary>
+        /// Legacy Simultria API composition asset. Retained so existing
+        /// serialized development profiles continue to load unchanged.
         /// </summary>
         public SimultriaApiProfile ApiProfileReference
         {
@@ -49,11 +67,22 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         /// <summary>
-        /// Explicit profile when assigned; otherwise the credential-free
-        /// Simultria API package default.
+        /// Legacy effective profile. This is null when a generic connection
+        /// profile is assigned so callers cannot silently ignore it.
         /// </summary>
         public SimultriaApiProfile EffectiveApiProfile =>
-            apiProfileReference ?? SimultriaApiProfileDefaults.Load();
+            apiConnectionProfileReference != null
+                ? null
+                : apiProfileReference ?? SimultriaApiProfileDefaults.Load();
+
+        /// <summary>
+        /// The exact connection asset selected for identity checks. A legacy
+        /// package default is used only when neither explicit field is set.
+        /// </summary>
+        public ScriptableObject EffectiveProfileReference =>
+            apiConnectionProfileReference != null
+                ? (ScriptableObject)apiConnectionProfileReference
+                : EffectiveApiProfile;
 
         public int ProjectId
         {
@@ -109,17 +138,48 @@ namespace Deucarian.SimultriaViewerConnection
             out string error)
         {
             status = null;
-            SimultriaApiProfile profile = EffectiveApiProfile;
-            if (profile == null)
+            if (!TryCreateComposition(
+                    out ApiComposition composition,
+                    out error))
             {
-                error =
-                    "The package-provided Simultria API profile is missing.";
                 return false;
             }
 
-            return profile.TryGetEnvironmentStatus(
-                EnvironmentId,
-                out status,
+            status = composition.GetEnvironmentStatus(EnvironmentId);
+            error = status.Message;
+            return status.IsResolved;
+        }
+
+        /// <summary>
+        /// Creates the selected Simultria-compatible composition. Generic
+        /// profiles are validated through the Simultria adapter; the legacy
+        /// profile path remains available for serialized compatibility.
+        /// </summary>
+        public bool TryCreateComposition(
+            out ApiComposition composition,
+            out string error)
+        {
+            if (apiConnectionProfileReference != null)
+            {
+                return SimultriaApiConnectionProfileAdapter
+                    .TryCreateComposition(
+                        apiConnectionProfileReference,
+                        out composition,
+                        out error);
+            }
+
+            SimultriaApiProfile legacyProfile = EffectiveApiProfile;
+            if (legacyProfile == null)
+            {
+                composition = null;
+                error =
+                    "Assign an API connection profile to the Simultria " +
+                    "viewer development profile.";
+                return false;
+            }
+
+            return legacyProfile.TryCreateComposition(
+                out composition,
                 out error);
         }
 
