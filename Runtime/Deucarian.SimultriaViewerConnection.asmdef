@@ -1,0 +1,20 @@
+{
+  "name": "Deucarian.SimultriaViewerConnection",
+  "rootNamespace": "Deucarian.SimultriaViewerConnection",
+  "references": [
+    "Deucarian.API",
+    "Deucarian.CommandRouting",
+    "Deucarian.Simultria.API",
+    "Deucarian.ViewerAuthentication",
+    "Newtonsoft.Json"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
