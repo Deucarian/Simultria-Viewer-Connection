@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0] - 2026-08-20
+
+- Added generic `ApiConnectionProfile` authentication registration overloads,
+  validated through Simultria API's reusable connection adapter.
+- Made development profiles prefer a project-owned generic connection while
+  retaining their legacy `SimultriaApiProfile` field and APIs for serialized
+  compatibility.
+- Updated Edit Mode authentication, trusted binding validation, and live model
+  resolution to use the same selected generic or legacy composition.
+- Added explicit generic-connection support to the optional runtime provider.
+- Made legacy default-provider registration conditional so a package default
+  with blank hosts leaves project-owned runtime composition available.
+- Updated dependencies to Deucarian API 1.4.2 and Simultria API 0.3.0.
+
 ## [0.2.0] - 2026-08-19
 
 - Added a package-owned Edit Mode Simultria authentication target that yields

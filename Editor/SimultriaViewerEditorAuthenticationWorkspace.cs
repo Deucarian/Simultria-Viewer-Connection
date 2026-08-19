@@ -1,14 +1,24 @@
 using System;
 using System.Threading;
+using Deucarian.API.Configuration;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.ViewerAuthentication;
 using Deucarian.ViewerAuthentication.Editor;
 using UnityEditor;
+using UnityEngine;
 
 namespace Deucarian.SimultriaViewerConnection.Editor
 {
     internal sealed class SimultriaViewerEditorAuthenticationConfiguration
     {
+        internal SimultriaViewerEditorAuthenticationConfiguration(
+            ApiConnectionProfile connectionProfile,
+            Deucarian.API.Models.ApiEnvironmentId environmentId)
+        {
+            ConnectionProfile = connectionProfile;
+            EnvironmentId = environmentId;
+        }
+
         internal SimultriaViewerEditorAuthenticationConfiguration(
             SimultriaApiProfile apiProfile,
             Deucarian.API.Models.ApiEnvironmentId environmentId)
@@ -17,7 +27,14 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             EnvironmentId = environmentId;
         }
 
+        internal ApiConnectionProfile ConnectionProfile { get; }
+
         internal SimultriaApiProfile ApiProfile { get; }
+
+        internal ScriptableObject ProfileReference =>
+            ConnectionProfile != null
+                ? (ScriptableObject)ConnectionProfile
+                : ApiProfile;
 
         internal Deucarian.API.Models.ApiEnvironmentId EnvironmentId { get; }
     }
@@ -37,7 +54,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             IDisposable> registerTarget;
         private IDisposable registration;
         private ViewerAuthenticationSession session;
-        private SimultriaApiProfile attemptedApiProfile;
+        private ScriptableObject attemptedProfile;
         private string attemptedEnvironmentId;
         private bool attemptRecorded;
         private bool invalidated = true;
@@ -84,16 +101,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                 SimultriaViewerEditorAuthenticationConfiguration configuration =
                     resolveConfiguration();
-                SimultriaApiProfile apiProfile = configuration?.ApiProfile;
+                ScriptableObject profileReference =
+                    configuration?.ProfileReference;
                 string environmentId = configuration?.EnvironmentId.Value;
-                if (configuration == null || apiProfile == null)
+                if (configuration == null || profileReference == null)
                 {
                     Release(invalidate: false);
                     ClearAttempt();
                     return;
                 }
 
-                bool sameAttempt = IsSameAttempt(apiProfile, environmentId);
+                bool sameAttempt = IsSameAttempt(
+                    profileReference,
+                    environmentId);
                 if (!invalidated && sameAttempt)
                 {
                     if (registration == null || HasOwnTarget())
@@ -124,7 +144,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                 session = candidate;
                 registration = candidateRegistration;
-                RecordAttempt(apiProfile, environmentId);
+                RecordAttempt(profileReference, environmentId);
                 RebindRememberedTokenOwner(
                     SimultriaViewerEditorAuthenticationHost
                         .LegacyReportViewerTargetId,
@@ -193,6 +213,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             SimultriaViewerEditorAuthenticationConfiguration configuration,
             ViewerAuthenticationSession session)
         {
+            if (configuration.ConnectionProfile != null)
+            {
+                return SimultriaViewerConnectionAuthentication.TryRegister(
+                        configuration.ConnectionProfile,
+                        configuration.EnvironmentId,
+                        session,
+                        out IDisposable connectionRegistration,
+                        out _,
+                        out _)
+                    ? connectionRegistration
+                    : null;
+            }
+
             return SimultriaViewerConnectionAuthentication.TryRegister(
                     configuration.ApiProfile,
                     configuration.EnvironmentId,
@@ -205,11 +238,11 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         private bool IsSameAttempt(
-            SimultriaApiProfile apiProfile,
+            ScriptableObject profile,
             string environmentId)
         {
             return attemptRecorded &&
-                   ReferenceEquals(attemptedApiProfile, apiProfile) &&
+                   ReferenceEquals(attemptedProfile, profile) &&
                    string.Equals(
                        attemptedEnvironmentId,
                        environmentId,
@@ -217,10 +250,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         private void RecordAttempt(
-            SimultriaApiProfile apiProfile,
+            ScriptableObject profile,
             string environmentId)
         {
-            attemptedApiProfile = apiProfile;
+            attemptedProfile = profile;
             attemptedEnvironmentId = environmentId;
             attemptRecorded = true;
             invalidated = false;
@@ -228,7 +261,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private void ClearAttempt()
         {
-            attemptedApiProfile = null;
+            attemptedProfile = null;
             attemptedEnvironmentId = null;
             attemptRecorded = false;
             invalidated = true;
@@ -307,6 +340,14 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     out _,
                     out _))
             {
+                if (profile.ConnectionProfileReference != null)
+                {
+                    return new
+                        SimultriaViewerEditorAuthenticationConfiguration(
+                            profile.ConnectionProfileReference,
+                            profile.EnvironmentId);
+                }
+
                 return new SimultriaViewerEditorAuthenticationConfiguration(
                     profile.EffectiveApiProfile,
                     profile.EnvironmentId);
