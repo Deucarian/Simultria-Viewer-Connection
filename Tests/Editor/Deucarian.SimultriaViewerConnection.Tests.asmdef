@@ -4,8 +4,11 @@
   "references": [
     "Deucarian.API",
     "Deucarian.CommandRouting",
+    "Deucarian.Session",
+    "Deucarian.Simultria.API",
     "Deucarian.SimultriaViewerConnection",
     "Deucarian.SimultriaViewerConnection.Editor",
+    "Deucarian.ViewerAuthentication",
     "Newtonsoft.Json"
   ],
   "includePlatforms": [

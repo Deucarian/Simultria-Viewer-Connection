@@ -24,6 +24,16 @@ namespace Deucarian.SimultriaViewerConnection
         [JsonProperty("model_version_id", NullValueHandling = NullValueHandling.Ignore)]
         public int? ModelVersionId { get; set; }
 
+        /// <summary>
+        /// Optional live-only generic viewer source resolved through Simultria
+        /// API. Credential-free previews and exports leave this empty.
+        /// </summary>
+        [JsonProperty("model_url", NullValueHandling = NullValueHandling.Ignore)]
+        public string ModelUrl { get; set; }
+
+        [JsonProperty("model_version", NullValueHandling = NullValueHandling.Ignore)]
+        public string ModelVersion { get; set; }
+
         [JsonProperty("placement", NullValueHandling = NullValueHandling.Ignore)]
         public SimultriaViewerPlacementAlignment Placement { get; set; }
 
@@ -59,6 +69,18 @@ namespace Deucarian.SimultriaViewerConnection
                 return false;
             }
 
+            if (!string.IsNullOrWhiteSpace(ModelUrl) &&
+                (!Uri.TryCreate(ModelUrl.Trim(), UriKind.Absolute, out Uri modelUri) ||
+                 (modelUri.Scheme != Uri.UriSchemeHttp &&
+                  modelUri.Scheme != Uri.UriSchemeHttps) ||
+                 !string.IsNullOrEmpty(modelUri.UserInfo) ||
+                 ContainsBearerQuery(modelUri.Query)))
+            {
+                error =
+                    "Model URL must be an absolute credential-free HTTP(S) URL.";
+                return false;
+            }
+
             if (Placement != null && !Placement.IsFinite())
             {
                 error = "Placement alignment must contain finite values.";
@@ -72,6 +94,17 @@ namespace Deucarian.SimultriaViewerConnection
 
             error = null;
             return true;
+        }
+
+        private static bool ContainsBearerQuery(string query)
+        {
+            string value = query ?? string.Empty;
+            return value.IndexOf(
+                       "access_token=",
+                       StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf(
+                       "bearer=",
+                       StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 

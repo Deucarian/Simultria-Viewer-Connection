@@ -27,6 +27,10 @@ generic viewer UI, or a viewer application bootstrap.
 - The project default lives in `ProjectSettings`; a local override lives only in
   gitignored `UserSettings`.
 - WebGL development export is explicit, optional, and credential-free.
+- Runtime connection leases must use the same session for target registration,
+  API authentication, and trusted-origin model loading.
+- Model URLs are resolved only for live dispatch and never include bearer
+  values; preview/export commands remain URL-free.
 - Do not add direct `UnityEngine.Debug` calls.
 
 ## Validation
