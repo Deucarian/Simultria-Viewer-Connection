@@ -1,4 +1,5 @@
 using Deucarian.API.Core;
+using Deucarian.Simultria.API.Configuration;
 using Deucarian.ViewerAuthentication;
 
 namespace Deucarian.SimultriaViewerConnection
@@ -31,7 +32,9 @@ namespace Deucarian.SimultriaViewerConnection
                 out environmentMessage);
             ViewerAuthenticationStatusSnapshot authentication = null;
             if (TryResolveAuthenticationTarget(
-                    out ViewerAuthenticationTarget authenticationTarget))
+                    profile,
+                    out ViewerAuthenticationTarget authenticationTarget,
+                    out _))
             {
                 authentication = authenticationTarget.Session.Status;
             }
@@ -45,15 +48,42 @@ namespace Deucarian.SimultriaViewerConnection
         public static bool TryResolveAuthenticationTarget(
             out ViewerAuthenticationTarget target)
         {
+            return TryResolveAuthenticationTarget(
+                null,
+                out target,
+                out _);
+        }
+
+        internal static bool TryResolveAuthenticationTarget(
+            SimultriaViewerDevelopmentProfile profile,
+            out ViewerAuthenticationTarget target,
+            out string error)
+        {
             var targets = ViewerAuthenticationTargetRegistry.Targets;
-            if (targets.Count == 1)
+            if (targets.Count != 1)
             {
-                target = targets[0];
-                return true;
+                target = null;
+                error = targets.Count == 0
+                    ? "The stable Simultria viewer authentication target is not registered."
+                    : "Multiple Viewer Authentication targets are registered; exactly one is required.";
+                return false;
             }
 
-            target = null;
-            return false;
+            target = targets[0];
+            SimultriaApiProfile expectedProfile = profile?.EffectiveApiProfile;
+            if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
+                    target,
+                    expectedProfile,
+                    profile == null
+                        ? default(Deucarian.API.Models.ApiEnvironmentId)
+                        : profile.EnvironmentId,
+                    out error))
+            {
+                target = null;
+                return false;
+            }
+
+            return true;
         }
     }
 }

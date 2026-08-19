@@ -3,7 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using Deucarian.API.Core;
+using Deucarian.Simultria.API.Models;
+using Deucarian.Simultria.API.Services;
 using Deucarian.ViewerAuthentication;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace Deucarian.SimultriaViewerConnection.Editor
@@ -43,25 +46,39 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             out CommandRoutePortBehaviour port,
             out string error)
         {
+            return TryResolveLivePort(
+                out port,
+                out _,
+                out error);
+        }
+
+        public static bool TryResolveLivePort(
+            out CommandRoutePortBehaviour port,
+            out ViewerAuthenticationTarget authenticationTarget,
+            out string error)
+        {
             port = null;
+            authenticationTarget = null;
             if (!SimultriaViewerConnectionStatus.TryResolveAuthenticationTarget(
-                    out ViewerAuthenticationTarget authenticationTarget))
+                    null,
+                    out authenticationTarget,
+                    out string authenticationError))
             {
-                int targetCount = ViewerAuthenticationTargetRegistry.Targets.Count;
-                error = targetCount == 0
-                    ? "Waiting for the running viewer to register its Viewer Authentication target."
-                    : "Multiple Viewer Authentication targets are registered; exactly one is required for development auto-load.";
+                error = "Waiting for the running viewer. " +
+                        authenticationError;
                 return false;
             }
 
             if (authenticationTarget.Session?.Status.HasAccessToken != true)
             {
+                authenticationTarget = null;
                 error = "Waiting for authentication. Open Tools/Deucarian/Viewer/Authentication.";
                 return false;
             }
 
             if (!TryResolveCommandRoute(out port, out int readyCount))
             {
+                authenticationTarget = null;
                 error = readyCount == 0
                     ? "Waiting for the running viewer to initialize its Command Routing scene port."
                     : "Multiple initialized Command Routing scene ports were found; exactly one is required for development auto-load.";
@@ -106,19 +123,252 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             CommandEnvelope command,
             CancellationToken cancellationToken)
         {
-            if (!TryResolveLivePort(out var port, out string error))
+            if (!TryResolveLivePort(
+                    out CommandRoutePortBehaviour port,
+                    out ViewerAuthenticationTarget authenticationTarget,
+                    out string error))
             {
                 return CommandResult.Failure("viewer_not_ready", error);
             }
 
+            if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                    out SimultriaViewerDevelopmentProfile profile,
+                    out _,
+                    out error))
+            {
+                return CommandResult.Failure(
+                    "development_profile_unavailable",
+                    error);
+            }
+
+            return await DispatchToPortAsync(
+                command,
+                profile,
+                authenticationTarget,
+                port,
+                cancellationToken);
+        }
+
+        internal static async Task<CommandResult> DispatchToPortAsync(
+            CommandEnvelope command,
+            SimultriaViewerDevelopmentProfile profile,
+            ViewerAuthenticationTarget authenticationTarget,
+            CommandRoutePortBehaviour port,
+            CancellationToken cancellationToken)
+        {
+            LiveCommandPreparation preparation = await PrepareLiveCommandAsync(
+                command,
+                profile,
+                authenticationTarget,
+                cancellationToken);
+            if (!preparation.Succeeded)
+            {
+                return CommandResult.Failure(
+                    preparation.ErrorCode,
+                    preparation.Message);
+            }
+
             CommandRouteOutcome outcome = await port.RouteMessageAsync(
-                SimultriaViewerInitializationCommand.Serialize(command, false),
+                SimultriaViewerInitializationCommand.Serialize(
+                    preparation.Command,
+                    false),
                 SimultriaViewerInitializationCommand.DevelopmentTransport,
                 SimultriaViewerInitializationCommand.DevelopmentRemoteEndpoint,
                 cancellationToken);
             return outcome?.Result ?? CommandResult.Failure(
                 "route_unavailable",
                 "The command route returned no result.");
+        }
+
+        internal static async Task<LiveCommandPreparation>
+            PrepareLiveCommandAsync(
+                CommandEnvelope command,
+                SimultriaViewerDevelopmentProfile profile,
+                ViewerAuthenticationTarget authenticationTarget,
+                CancellationToken cancellationToken)
+        {
+            if (command == null || profile == null ||
+                authenticationTarget?.Session == null)
+            {
+                return LiveCommandPreparation.Failure(
+                    "live_context_unavailable",
+                    "The live Simultria viewer context is incomplete.");
+            }
+
+            if (!command.TryReadPayload(
+                    out SimultriaViewerInitializationPayload payload,
+                    out string payloadError) ||
+                !payload.IsValid(out payloadError))
+            {
+                return LiveCommandPreparation.Failure(
+                    "invalid_initialization",
+                    payloadError);
+            }
+
+            if (!string.Equals(
+                    payload.EnvironmentId,
+                    profile.EnvironmentId.Value,
+                    StringComparison.Ordinal))
+            {
+                return LiveCommandPreparation.Failure(
+                    "development_context_changed",
+                    "The selected Simultria environment changed after the " +
+                    "development command was prepared.");
+            }
+
+            if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
+                    authenticationTarget,
+                    profile.EffectiveApiProfile,
+                    profile.EnvironmentId,
+                    out string authenticationError))
+            {
+                return LiveCommandPreparation.Failure(
+                    "authentication_context_mismatch",
+                    authenticationError);
+            }
+
+            if (profile.EffectiveApiProfile == null)
+            {
+                return LiveCommandPreparation.Failure(
+                    "api_composition_unavailable",
+                    "The package-provided Simultria API profile is missing.");
+            }
+
+            if (!profile.EffectiveApiProfile.TryCreateComposition(
+                    out ApiComposition composition,
+                    out string compositionError))
+            {
+                return LiveCommandPreparation.Failure(
+                    "api_composition_unavailable",
+                    compositionError);
+            }
+
+            IApiClient apiClient = ApiClientFactory.Create(
+                null,
+                authenticationTarget.Session.ApiAuthProvider);
+            var resolver = new SimultriaViewerModelResolver(
+                apiClient,
+                composition,
+                profile.EnvironmentId);
+            SimultriaViewerModelResolveResult resolved =
+                await resolver.ResolveAsync(
+                    payload.ProjectId,
+                    payload.ModelId,
+                    payload.ModelVersionId,
+                    cancellationToken);
+            if (resolved == null || !resolved.Succeeded)
+            {
+                return LiveCommandPreparation.Failure(
+                    resolved?.ErrorCode ?? "model_resolution_failed",
+                    resolved?.Message ??
+                    "The Simultria model source could not be resolved.");
+            }
+
+            return TryEnrichLiveCommand(
+                command,
+                payload,
+                resolved.DownloadUrl,
+                resolved.ModelVersionId,
+                out CommandEnvelope enriched,
+                out string enrichmentError)
+                ? LiveCommandPreparation.Success(enriched)
+                : LiveCommandPreparation.Failure(
+                    "unsafe_model_source",
+                    enrichmentError);
+        }
+
+        internal static bool TryEnrichLiveCommand(
+            CommandEnvelope command,
+            SimultriaViewerInitializationPayload payload,
+            string modelUrl,
+            int modelVersionId,
+            out CommandEnvelope enriched,
+            out string error)
+        {
+            enriched = null;
+            if (command == null || payload == null || modelVersionId <= 0 ||
+                string.IsNullOrWhiteSpace(modelUrl))
+            {
+                error = "The resolved model source is incomplete.";
+                return false;
+            }
+
+            if (ContainsBearerQuery(modelUrl))
+            {
+                error =
+                    "The resolved model URL contains a bearer-like query value.";
+                return false;
+            }
+
+            payload.ModelUrl = modelUrl.Trim();
+            payload.ModelVersionId = modelVersionId;
+            payload.ModelVersion =
+                modelVersionId.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+            if (!payload.IsValid(out error))
+            {
+                return false;
+            }
+
+            var enrichedPayload = JObject.FromObject(payload);
+            enriched = new CommandEnvelope(
+                command.CommandName,
+                enrichedPayload,
+                command.CommandId,
+                command.ProtocolVersion,
+                command.Metadata,
+                command.RawEnvelope);
+            error = null;
+            return true;
+        }
+
+        private static bool ContainsBearerQuery(string modelUrl)
+        {
+            if (!Uri.TryCreate(modelUrl, UriKind.Absolute, out Uri uri))
+            {
+                return true;
+            }
+
+            string query = uri.Query ?? string.Empty;
+            return query.IndexOf(
+                       "access_token=",
+                       StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   query.IndexOf(
+                       "bearer=",
+                       StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        internal sealed class LiveCommandPreparation
+        {
+            private LiveCommandPreparation(
+                bool succeeded,
+                CommandEnvelope command,
+                string errorCode,
+                string message)
+            {
+                Succeeded = succeeded;
+                Command = command;
+                ErrorCode = errorCode;
+                Message = message;
+            }
+
+            internal bool Succeeded { get; }
+            internal CommandEnvelope Command { get; }
+            internal string ErrorCode { get; }
+            internal string Message { get; }
+
+            internal static LiveCommandPreparation Success(
+                CommandEnvelope command) =>
+                new LiveCommandPreparation(true, command, null, null);
+
+            internal static LiveCommandPreparation Failure(
+                string errorCode,
+                string message) =>
+                new LiveCommandPreparation(
+                    false,
+                    null,
+                    errorCode,
+                    message);
         }
     }
 }

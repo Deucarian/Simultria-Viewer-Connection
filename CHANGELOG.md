@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0] - 2026-08-19
+
+- Added a package-owned Edit Mode Simultria authentication target that yields
+  synchronously to live viewer targets and Play Mode.
+- Made the editor target available through the credential-free Simultria API
+  defaults when no project/model development profile is selected.
+- Added a guarded, token-opaque one-time remembered-owner migration from the
+  legacy Report Viewer target to the stable package target.
+- Added the Simultria implementation of Viewer Authentication's neutral runtime
+  connection provider, including a session-bound API client and exact trusted
+  API origin.
+- Added live-only authenticated model resolution and generic `model_url` /
+  `model_version` enrichment while keeping previews and exports URL-free.
+- Made development-context auto-load opt-in for newly imported neutral viewers;
+  existing product ProjectSettings remain authoritative.
+- Added stable single-viewer authentication identity and explicit
+  `SimultriaApiProfile` plus `ApiEnvironmentId` runtime registration overloads.
+- Bound every live bearer session to the exact stable target, Simultria
+  provider, API profile, environment, and resolved authentication composition;
+  mismatches now fail before any API request.
+- Made editor registration retryable and owner migration post-success, deferred
+  registry-triggered refreshes outside registry mutations, and hardened runtime
+  cleanup so observer failures cannot strand a token session or provider lease.
+- Kept authentication sessions transient and endpoint/token ownership in
+  Simultria API and Viewer Authentication respectively.
+
 ## [0.1.0] - 2026-08-19
 
 - Added credential-free Simultria viewer development profiles.
