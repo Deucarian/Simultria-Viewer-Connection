@@ -27,6 +27,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                 useLocalProfileOverride = value;
                 Save(true);
+                SimultriaViewerEditorAuthenticationHost.RequestRefresh();
             }
         }
 
@@ -39,10 +40,20 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 string path = value == null
                     ? string.Empty
                     : AssetDatabase.GetAssetPath(value);
-                localProfileGuid = string.IsNullOrWhiteSpace(path)
+                string nextGuid = string.IsNullOrWhiteSpace(path)
                     ? string.Empty
                     : AssetDatabase.AssetPathToGUID(path);
+                if (string.Equals(
+                        localProfileGuid,
+                        nextGuid,
+                        System.StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                localProfileGuid = nextGuid;
                 Save(true);
+                SimultriaViewerEditorAuthenticationHost.RequestRefresh();
             }
         }
     }

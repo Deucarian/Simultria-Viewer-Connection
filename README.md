@@ -17,15 +17,14 @@ The package deliberately does not turn authentication into a Simultria feature:
 
 ## Install
 
-The repository is intentionally local-only during its first implementation
-pass. Add it as a local package while validating consumers:
+Install the stable package branch in a Simultria-backed viewer:
 
 ```json
-"com.deucarian.simultria-viewer-connection": "file:C:/Repositories/Simultria-Viewer-Connection"
+"com.deucarian.simultria-viewer-connection": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
 ```
 
 Required package versions are declared in `package.json`, including API 1.2.0,
-Simultria API 0.1.0, Command Routing 0.1.2, and Viewer Authentication 0.4.0.
+  Simultria API 0.1.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
 
 ## Development profile
 
@@ -63,6 +62,29 @@ The window uses the shared Deucarian Editor chrome and shows:
 
 It never displays or serializes an access token.
 
+## Edit Mode authentication
+
+The package registers one editor-lifetime Viewer Authentication target backed
+by a private transient session and a resolved Simultria API provider. A
+selected development profile overrides its API composition and environment;
+when none is selected, the credential-free Simultria API package profile and
+`simultria.development` are used. Project and model IDs are never required
+merely to sign in or refresh authentication. This makes the shared
+`Tools > Deucarian > Viewer > Authentication` window usable outside Play Mode
+without any product-local login or validation endpoint assets.
+
+The target uses the stable ID
+`SimultriaViewerConnectionAuthentication.DefaultTargetId`. Viewer
+Authentication remains the sole owner of optional remembered-token storage in
+ignored `UserSettings`; this package never reads a token into the development
+profile. A remembered token owned by the legacy `report-viewer` target is
+rebound once to the stable package target through Viewer Authentication's
+token-opaque Editor facade. Other target owners are never claimed. The editor target is
+synchronously removed before Play Mode and as soon as any real viewer target
+is registered. It is restored only after the runtime target is gone and the
+editor has returned to Edit Mode, so the menu never receives an intentional
+editor/runtime target pair and the package never reads or copies the token.
+
 ## Canonical initialization command
 
 The package emits `initialize_viewer` with a typed payload:
@@ -93,12 +115,29 @@ The package emits `initialize_viewer` with a typed payload:
 }
 ```
 
+The stored preview/export remains URL-free. Immediately before a live local
+dispatch, the package resolves the selected model version with the sole live
+session's authenticated API client and adds the generic `model_url` and
+`model_version` fields. Resolution failure fails closed. Bearer values are
+never copied into the command or URL query, and bearer-like URL query fields
+are rejected.
+
+Before that request, the package verifies that the sole target is the stable
+`simultria-viewer` target and is backed by the same Simultria provider, API
+profile, environment, and resolved authentication composition selected by the
+development profile. An arbitrary viewer target or environment mismatch fails
+closed instead of forwarding its bearer.
+
 Play Mode auto-load waits for exactly one live Viewer Authentication target with
 an access token and exactly one initialized `CommandRoutePortBehaviour`. It then
 routes the JSON through `ICommandRoutePort.RouteMessageAsync` using transport
 `editor-local` and remote endpoint `development-profile`. It never invokes a
 Report, Activity, or template bootstrap directly and stores no active-viewer
 dropdown or target ID.
+
+Auto-load is opt-in for a newly imported package. Neutral templates and Activity
+Viewer therefore do not warn on every Play when no development profile is
+selected. Report Viewer can keep its explicit committed project setting enabled.
 
 ## Consumer composition
 
@@ -131,6 +170,49 @@ For authentication composition, call
 environment through Simultria API, creates one
 `SimultriaViewerAuthenticationProvider`, and registers that same provider for
 generic acquisition and server validation in Viewer Authentication.
+
+When this optional package is present at runtime, it also registers one
+`IViewerRuntimeConnectionProvider` factory. It creates no live authentication
+target unless a generic viewer resolves the provider. The resulting lease owns
+the stable `simultria-viewer` session, an API client backed by that exact
+session, the resolved Simultria API base URL, and its exact authenticated
+origin. Generic templates can therefore load the bearer-required model URL
+without a local endpoint asset or a Template-to-Simultria dependency.
+
+Single-viewer runtimes should use the overload without target strings so Edit
+Mode and Play Mode keep the same stable identity:
+
+```csharp
+SimultriaViewerConnectionAuthentication.TryRegister(
+    simultriaApiProfile,
+    environmentId,
+    authenticationSession,
+    out IDisposable authenticationRegistration,
+    out ApiEnvironmentStatus environmentStatus,
+    out string error);
+```
+
+This explicit API-profile/environment overload does not require a development
+project/model profile. Existing products migrating from another target ID
+should switch to the stable package identity; the package includes the guarded
+one-time `report-viewer` owner migration. Multi-viewer products may use the
+explicit target-ID overload but do not participate in that migration.
+
+The package deliberately does not reflect into a generic template bootstrap or
+create a second application session. A generic template or a dedicated
+template-to-Simultria coupling package should call the registration overload
+for the template's authoritative session and register
+`SimultriaViewerInitializationCommandHandler<TApplication>` in that template's
+existing Command Routing composition. Activity consumers then need no local
+runtime code; project/model payload mapping remains in the shared composition,
+not in the Activity project. This avoids a Template dependency or package
+cycle here.
+
+The resolved model URL is useful only together with that runtime connection.
+The download route requires bearer authentication, while a generic template
+must attach bearer credentials only to the explicitly trusted exact origin.
+Provider creation failure or provider ambiguity therefore fails closed rather
+than falling back to an unrelated local API client.
 
 ## Local WebGL development context
 

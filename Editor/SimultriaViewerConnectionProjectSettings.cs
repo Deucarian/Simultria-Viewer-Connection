@@ -11,17 +11,29 @@ namespace Deucarian.SimultriaViewerConnection.Editor
     {
         public const string SettingsPath =
             "ProjectSettings/DeucarianSimultriaViewerConnection.asset";
+        internal const bool DefaultAutoLoadInPlayMode = false;
 
         [SerializeField] private string defaultProfileGuid = string.Empty;
-        [SerializeField] private bool autoLoadInPlayMode = true;
+        [SerializeField] private bool autoLoadInPlayMode =
+            DefaultAutoLoadInPlayMode;
 
         public SimultriaViewerDevelopmentProfile DefaultProfile
         {
             get => LoadProfile(defaultProfileGuid);
             set
             {
-                defaultProfileGuid = ToGuid(value);
+                string nextGuid = ToGuid(value);
+                if (string.Equals(
+                        defaultProfileGuid,
+                        nextGuid,
+                        System.StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                defaultProfileGuid = nextGuid;
                 Save(true);
+                SimultriaViewerEditorAuthenticationHost.RequestRefresh();
             }
         }
 

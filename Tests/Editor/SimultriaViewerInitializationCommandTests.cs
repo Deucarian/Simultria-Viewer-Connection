@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.CommandRouting;
+using Deucarian.SimultriaViewerConnection.Editor;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -69,6 +70,54 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             {
                 UnityEngine.Object.DestroyImmediate(owner);
             }
+        }
+
+        [Test]
+        public void LiveEnrichmentAddsGenericModelSourceWithoutChangingPreview()
+        {
+            SimultriaViewerInitializationPayload payload = CreatePayload(44);
+            CommandEnvelope command =
+                SimultriaViewerInitializationCommand.Create(payload);
+
+            bool enrichedSuccessfully =
+                SimultriaViewerDevelopmentCommandService.TryEnrichLiveCommand(
+                    command,
+                    payload,
+                    "https://api.example.test/api/v2/models/versions/21/download",
+                    21,
+                    out CommandEnvelope enriched,
+                    out string error);
+
+            Assert.That(enrichedSuccessfully, Is.True, error);
+            Assert.That(
+                SimultriaViewerInitializationCommand.Serialize(command),
+                Does.Not.Contain("model_url"));
+            string liveJson =
+                SimultriaViewerInitializationCommand.Serialize(enriched);
+            Assert.That(liveJson, Does.Contain("\"model_url\""));
+            Assert.That(liveJson, Does.Contain("\"model_version\": \"21\""));
+            Assert.That(liveJson, Does.Not.Contain("access_token"));
+            Assert.That(liveJson, Does.Not.Contain("Authorization"));
+        }
+
+        [Test]
+        public void LiveEnrichmentRejectsBearerLikeUrlQuery()
+        {
+            SimultriaViewerInitializationPayload payload = CreatePayload(45);
+            CommandEnvelope command =
+                SimultriaViewerInitializationCommand.Create(payload);
+
+            bool enrichedSuccessfully =
+                SimultriaViewerDevelopmentCommandService.TryEnrichLiveCommand(
+                    command,
+                    payload,
+                    "https://api.example.test/download?access_token=secret",
+                    21,
+                    out _,
+                    out string error);
+
+            Assert.That(enrichedSuccessfully, Is.False);
+            Assert.That(error, Does.Not.Contain("secret"));
         }
 
         private static SimultriaViewerInitializationPayload CreatePayload(long revision)

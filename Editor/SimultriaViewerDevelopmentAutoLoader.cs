@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Deucarian.CommandRouting;
 using Deucarian.Logging;
+using Deucarian.ViewerAuthentication;
 using UnityEditor;
 
 namespace Deucarian.SimultriaViewerConnection.Editor
@@ -123,6 +124,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (!SimultriaViewerDevelopmentCommandService.TryResolveLivePort(
                     out CommandRoutePortBehaviour port,
+                    out ViewerAuthenticationTarget authenticationTarget,
                     out string waitReason))
             {
                 if (!string.Equals(lastWaitReason, waitReason, StringComparison.Ordinal))
@@ -142,22 +144,33 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             dispatching = true;
             EditorApplication.update -= Tick;
-            DispatchAsync(port);
+            DispatchAsync(port, authenticationTarget);
         }
 
         private static async void DispatchAsync(
-            CommandRoutePortBehaviour port)
+            CommandRoutePortBehaviour port,
+            ViewerAuthenticationTarget authenticationTarget)
         {
             try
             {
-                CommandRouteOutcome outcome = await port.RouteMessageAsync(
-                    SimultriaViewerInitializationCommand.Serialize(
+                if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                        out SimultriaViewerDevelopmentProfile profile,
+                        out _,
+                        out string profileError))
+                {
+                    Log.Warning(
+                        "Development context was not auto-loaded. " +
+                        profileError);
+                    return;
+                }
+
+                CommandResult result = await
+                    SimultriaViewerDevelopmentCommandService.DispatchToPortAsync(
                         pendingCommand,
-                        false),
-                    SimultriaViewerInitializationCommand.DevelopmentTransport,
-                    SimultriaViewerInitializationCommand.DevelopmentRemoteEndpoint,
-                    cancellation?.Token ?? CancellationToken.None);
-                CommandResult result = outcome?.Result;
+                        profile,
+                        authenticationTarget,
+                        port,
+                        cancellation?.Token ?? CancellationToken.None);
                 if (result != null && result.Succeeded)
                 {
                     Log.Info("Auto-loaded the selected Simultria development profile through Command Routing.");

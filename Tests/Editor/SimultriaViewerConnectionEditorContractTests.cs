@@ -17,6 +17,15 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void NewProjectSettingsKeepDevelopmentAutoLoadOptIn()
+        {
+            Assert.That(
+                SimultriaViewerConnectionProjectSettings
+                    .DefaultAutoLoadInPlayMode,
+                Is.False);
+        }
+
+        [Test]
         public void WebGlExportIsExplicitAndCredentialFreeByContract()
         {
             Assert.That(

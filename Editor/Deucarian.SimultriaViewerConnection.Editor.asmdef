@@ -6,9 +6,11 @@
     "Deucarian.CommandRouting",
     "Deucarian.Editor",
     "Deucarian.Logging",
+    "Deucarian.Session",
     "Deucarian.Simultria.API",
     "Deucarian.SimultriaViewerConnection",
     "Deucarian.ViewerAuthentication",
+    "Deucarian.ViewerAuthentication.Editor",
     "Newtonsoft.Json"
   ],
   "includePlatforms": [
