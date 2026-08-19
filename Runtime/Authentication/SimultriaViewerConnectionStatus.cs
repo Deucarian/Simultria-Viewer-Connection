@@ -1,5 +1,4 @@
 using Deucarian.API.Core;
-using Deucarian.Simultria.API.Configuration;
 using Deucarian.ViewerAuthentication;
 
 namespace Deucarian.SimultriaViewerConnection
@@ -70,10 +69,9 @@ namespace Deucarian.SimultriaViewerConnection
             }
 
             target = targets[0];
-            SimultriaApiProfile expectedProfile = profile?.EffectiveApiProfile;
             if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
                     target,
-                    expectedProfile,
+                    profile,
                     profile == null
                         ? default(Deucarian.API.Models.ApiEnvironmentId)
                         : profile.EnvironmentId,

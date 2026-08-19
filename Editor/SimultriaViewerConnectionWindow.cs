@@ -49,7 +49,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 {
                     DeucarianEditorCards.DrawHeaderCard(
                         "Simultria Connection",
-                        "Choose one credential-free project/model profile. Environment, authentication, and Command Routing stay package-owned.",
+                        "Choose one credential-free project/model profile. " +
+                        "Deployment hosts stay in the project-owned API " +
+                        "connection profile; authentication and Command " +
+                        "Routing stay package-owned.",
                         "OPTIONAL VIEWER CONNECTION");
                     DrawStatus();
                     DrawSelection();
@@ -63,7 +66,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                     DeucarianEditorChrome.DrawFooterVersion(
                         "Simultria Viewer Connection",
-                "0.2.0");
+                        "0.3.0");
                 }
 
                 GUILayout.Space(12f);
