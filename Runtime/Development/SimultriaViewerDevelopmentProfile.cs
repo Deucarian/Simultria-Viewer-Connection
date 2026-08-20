@@ -18,8 +18,12 @@ namespace Deucarian.SimultriaViewerConnection
         fileName = "SimultriaViewerDevelopmentProfile")]
     public sealed class SimultriaViewerDevelopmentProfile : ScriptableObject
     {
+        public enum EnvironmentResolutionMode { Manual, AutomaticFromBuildMetadata }
         [SerializeField] private ApiEnvironmentId environmentId =
             SimultriaEnvironmentIds.Development;
+        [SerializeField] private EnvironmentResolutionMode environmentResolutionMode;
+        [SerializeField] private SimultriaBuildEnvironmentRoutingPolicy buildEnvironmentRoutingPolicy;
+        [SerializeField] private string buildMetadataOverride = string.Empty;
         [Tooltip(
             "Project-owned generic API connection. Hosts remain editable " +
             "in that asset and are never stored in this development profile.")]
@@ -45,6 +49,53 @@ namespace Deucarian.SimultriaViewerConnection
                 ? SimultriaEnvironmentIds.Development
                 : environmentId;
             set => environmentId = value;
+        }
+
+        public EnvironmentResolutionMode ResolutionMode
+        {
+            get => environmentResolutionMode;
+            set => environmentResolutionMode = value;
+        }
+
+        public SimultriaBuildEnvironmentRoutingPolicy BuildEnvironmentRoutingPolicy
+        {
+            get => buildEnvironmentRoutingPolicy;
+            set => buildEnvironmentRoutingPolicy = value;
+        }
+
+        public string BuildMetadataOverride
+        {
+            get => buildMetadataOverride ?? string.Empty;
+            set => buildMetadataOverride = value ?? string.Empty;
+        }
+
+        public bool TryResolveEffectiveEnvironment(
+            out ApiEnvironmentId resolvedEnvironmentId,
+            out string resolutionSource,
+            out string error)
+        {
+            if (environmentResolutionMode == EnvironmentResolutionMode.Manual)
+            {
+                resolvedEnvironmentId = EnvironmentId;
+                resolutionSource = "Manual profile selection";
+                error = null;
+                return true;
+            }
+
+            string metadata = string.IsNullOrWhiteSpace(buildMetadataOverride)
+                ? Application.version
+                : buildMetadataOverride;
+            if (buildEnvironmentRoutingPolicy == null)
+            {
+                resolvedEnvironmentId = default;
+                resolutionSource = "Automatic build metadata";
+                error = "Assign a Simultria build environment routing policy before using automatic resolution.";
+                return false;
+            }
+
+            bool resolved = buildEnvironmentRoutingPolicy.TryResolve(metadata, out resolvedEnvironmentId, out error);
+            resolutionSource = "Build metadata '" + metadata + "'";
+            return resolved;
         }
 
         /// <summary>
@@ -145,7 +196,11 @@ namespace Deucarian.SimultriaViewerConnection
                 return false;
             }
 
-            status = composition.GetEnvironmentStatus(EnvironmentId);
+            if (!TryResolveEffectiveEnvironment(out ApiEnvironmentId environmentId, out _, out error))
+            {
+                return false;
+            }
+            status = composition.GetEnvironmentStatus(environmentId);
             error = status.Message;
             return status.IsResolved;
         }
@@ -212,11 +267,18 @@ namespace Deucarian.SimultriaViewerConnection
             {
                 return false;
             }
+            if (!TryResolveEffectiveEnvironment(
+                    out ApiEnvironmentId resolvedEnvironmentId,
+                    out _,
+                    out error))
+            {
+                return false;
+            }
 
             payload = new SimultriaViewerInitializationPayload
             {
                 Revision = revision,
-                EnvironmentId = EnvironmentId.Value,
+                EnvironmentId = resolvedEnvironmentId.Value,
                 ProjectId = projectId,
                 ModelId = modelId,
                 ModelVersionId = modelVersionId > 0 ? (int?)modelVersionId : null,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Added optional, credential-free Simultria build-metadata environment routing.
+
 ## [0.3.1] - 2026-08-20
 
 - Replaced the hard-coded environment dropdown with `SimultriaEnvironmentDescriptors.Standard`
