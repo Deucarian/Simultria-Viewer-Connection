@@ -1,4 +1,6 @@
 using System;
+using Deucarian.API.Models;
+using Deucarian.Simultria.API.Configuration;
 using System.Threading;
 using Deucarian.CommandRouting;
 using Deucarian.Editor;
@@ -16,6 +18,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private string message = string.Empty;
         private DeucarianEditorStatus messageStatus = DeucarianEditorStatus.Info;
         private bool sending;
+        private static readonly string[] EnvironmentDisplayNames = new[]
+        {
+            "Development",
+            "Acceptance",
+            "Production"
+        };
+
+        private static readonly ApiEnvironmentId[] EnvironmentChoices = new[]
+        {
+            SimultriaEnvironmentIds.Development,
+            SimultriaEnvironmentIds.Acceptance,
+            SimultriaEnvironmentIds.Production
+        };
 
         [MenuItem("Tools/Deucarian/Viewer/Simultria Connection")]
         public static void Open()
@@ -208,6 +223,24 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                             EditorGUIUtility.PingObject(selected);
                         }
                     }
+
+                    if (SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                            out SimultriaViewerDevelopmentProfile selectedProfile,
+                            out string source,
+                            out string selectionError))
+                    {
+                        DrawEnvironmentChooser(selectedProfile, source);
+                    }
+                    else
+                    {
+                        using (new EditorGUILayout.HorizontalScope())
+                        {
+                            EditorGUILayout.LabelField("Environment", source);
+                            EditorGUILayout.HelpBox(
+                                selectionError,
+                                MessageType.Info);
+                        }
+                    }
                 },
                 "No endpoint URL, token, login route, or product-specific fields are stored here.");
         }
@@ -388,6 +421,91 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             {
                 SimultriaViewerConnectionProjectSettings.instance.DefaultProfile = profile;
             }
+        }
+
+        private void DrawEnvironmentChooser(
+            SimultriaViewerDevelopmentProfile profile,
+            string source)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("Environment source", source);
+                EditorGUILayout.LabelField(
+                    profile == null || profile.EnvironmentId.IsEmpty
+                        ? "Development (fallback)"
+                        : profile.EnvironmentId.Value,
+                    EditorStyles.miniLabel);
+            }
+
+            if (profile == null)
+            {
+                return;
+            }
+
+            ApiEnvironmentId current = profile.EnvironmentId;
+            int currentIndex = FindEnvironmentIndex(current);
+            string[] options = EnvironmentDisplayNames;
+            ApiEnvironmentId[] values = EnvironmentChoices;
+            if (currentIndex < 0 && !current.IsEmpty)
+            {
+                int customIndex = options.Length;
+                options = new string[options.Length + 1];
+                values = new ApiEnvironmentId[values.Length + 1];
+                Array.Copy(EnvironmentDisplayNames, options, EnvironmentDisplayNames.Length);
+                Array.Copy(EnvironmentChoices, values, EnvironmentChoices.Length);
+                options[customIndex] = $"Custom ({current.Value})";
+                values[customIndex] = current;
+                currentIndex = customIndex;
+            }
+
+            int selected = EditorGUILayout.Popup("Environment", currentIndex, options);
+            if (selected == currentIndex)
+            {
+                return;
+            }
+
+            profile.EnvironmentId = values[selected];
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+            SimultriaViewerEditorAuthenticationHost.RequestRefresh();
+        }
+
+        private static int FindEnvironmentIndex(ApiEnvironmentId current)
+        {
+            if (current.IsEmpty)
+            {
+                return FindEnvironmentLabel("Development");
+            }
+
+            string currentValue = current.Value;
+            for (int i = 0; i < EnvironmentChoices.Length; i++)
+            {
+                if (string.Equals(
+                        EnvironmentChoices[i].Value,
+                        currentValue,
+                        StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static int FindEnvironmentLabel(string label)
+        {
+            for (int i = 0; i < EnvironmentDisplayNames.Length; i++)
+            {
+                if (string.Equals(
+                        EnvironmentDisplayNames[i],
+                        label,
+                        StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return 0;
         }
 
         private void SetResult(bool succeeded, string resultMessage)
