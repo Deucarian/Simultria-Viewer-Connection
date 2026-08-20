@@ -1,0 +1,10 @@
+{
+  "capabilities": [
+    {
+      "id": "simultria-viewer-development-connection",
+      "description": "Optional credential-free Simultria viewer development context, environment selection, and build-metadata routing.",
+      "ownerPackageId": "com.deucarian.simultria-viewer-connection"
+    }
+  ],
+  "schemaVersion": 2
+}
