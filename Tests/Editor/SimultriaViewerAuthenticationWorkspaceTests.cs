@@ -626,7 +626,6 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 () => released = true);
 
             Assert.Throws<InvalidOperationException>(() => lifetime.Dispose());
-            await Task.Yield();
 
             Assert.That(session.Status.HasAccessToken, Is.False);
             Assert.That(released, Is.True);

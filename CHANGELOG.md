@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.1] - 2026-08-20
+
+- Replaced the hard-coded environment dropdown with `SimultriaEnvironmentDescriptors.Standard`
+  so Development, Testing, Acceptance, and Production appear in canonical order.
+- Kept empty environment IDs falling back to Development.
+- Kept unknown environment IDs as `Custom (...)` entries.
+- Updated the environment selector to keep behavior stable for successful changes,
+  including authentication refresh.
+
 ## [0.3.0] - 2026-08-20
 
 - Added generic `ApiConnectionProfile` authentication registration overloads,
