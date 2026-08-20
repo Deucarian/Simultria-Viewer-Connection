@@ -49,7 +49,7 @@ namespace Deucarian.SimultriaViewerConnection
                 return false;
             }
 
-            foreach (SimultriaEnvironmentDescriptor descriptor in SimultriaEnvironmentDescriptors.Standard)
+            foreach (ApiEnvironmentDescriptor descriptor in SimultriaEnvironmentDescriptors.Standard)
             {
                 if (descriptor.EnvironmentId == match.EnvironmentId)
                 {
