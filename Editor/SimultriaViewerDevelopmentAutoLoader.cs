@@ -14,6 +14,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             "Deucarian.SimultriaViewerConnection.PendingCommand";
         private const string PendingWarningKey =
             "Deucarian.SimultriaViewerConnection.PendingWarning";
+        private const string PendingAutomaticKey =
+            "Deucarian.SimultriaViewerConnection.PendingAutomatic";
         private const double MaximumWaitSeconds = 120d;
 
         private static readonly DLog Log = DLog.For("SimultriaViewerConnection.Development");
@@ -23,6 +25,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static double deadline;
         private static string lastWaitReason;
         private static bool dispatching;
+        private static bool pendingAutomatic;
+        private static bool resolvingAutomatic;
 
         static SimultriaViewerDevelopmentAutoLoader()
         {
@@ -67,11 +71,21 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
                     out SimultriaViewerDevelopmentProfile profile,
                     out _,
-                    out pendingWarning) ||
-                !SimultriaViewerDevelopmentCommandService.TryCreateCommand(
-                    profile,
-                    out pendingCommand,
                     out pendingWarning))
+            {
+                pendingCommand = null;
+            }
+            else if (profile.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion)
+            {
+                pendingAutomatic = true;
+                pendingWarning = null;
+            }
+            else if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
+                         profile,
+                         out pendingCommand,
+                         out pendingWarning))
             {
                 pendingCommand = null;
             }
@@ -82,11 +96,13 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     ? string.Empty
                     : SimultriaViewerInitializationCommand.Serialize(pendingCommand, false));
             SessionState.SetString(PendingWarningKey, pendingWarning ?? string.Empty);
+            SessionState.SetBool(PendingAutomaticKey, pendingAutomatic);
         }
 
         private static void Restore()
         {
             pendingWarning = SessionState.GetString(PendingWarningKey, string.Empty);
+            pendingAutomatic = SessionState.GetBool(PendingAutomaticKey, false);
             string json = SessionState.GetString(PendingCommandKey, string.Empty);
             pendingCommand = null;
             if (string.IsNullOrWhiteSpace(json))
@@ -118,6 +134,16 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (pendingCommand == null)
             {
+                if (pendingAutomatic)
+                {
+                    if (!resolvingAutomatic)
+                    {
+                        ResolveAutomaticCommandAsync();
+                    }
+
+                    return;
+                }
+
                 Stop();
                 return;
             }
@@ -202,11 +228,59 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
         }
 
+        private static async void ResolveAutomaticCommandAsync()
+        {
+            resolvingAutomatic = true;
+            try
+            {
+                if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                        out SimultriaViewerDevelopmentProfile profile,
+                        out _,
+                        out string profileError))
+                {
+                    pendingWarning = profileError;
+                    pendingAutomatic = false;
+                    return;
+                }
+
+                SimultriaViewerDevelopmentCommandService
+                    .DevelopmentCommandCreation creation =
+                    await SimultriaViewerDevelopmentCommandService
+                        .CreateCommandAsync(
+                            profile,
+                            SimultriaViewerEnvironmentResolver.CreateDefault(),
+                            cancellation?.Token ?? CancellationToken.None);
+                pendingCommand = creation?.Command;
+                pendingWarning = creation?.Succeeded == true
+                    ? null
+                    : creation?.Message ??
+                      "The automatic Simultria environment could not be resolved.";
+                pendingAutomatic = false;
+            }
+            catch (OperationCanceledException)
+            {
+                pendingAutomatic = false;
+            }
+            catch (Exception exception)
+            {
+                pendingWarning =
+                    "Automatic Simultria environment resolution failed with " +
+                    exception.GetType().Name + ".";
+                pendingAutomatic = false;
+            }
+            finally
+            {
+                resolvingAutomatic = false;
+            }
+        }
+
         private static void Stop()
         {
             EditorApplication.update -= Tick;
             dispatching = false;
             pendingCommand = null;
+            pendingAutomatic = false;
+            resolvingAutomatic = false;
             lastWaitReason = null;
             cancellation?.Cancel();
             cancellation?.Dispose();
@@ -217,8 +291,11 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         {
             pendingCommand = null;
             pendingWarning = null;
+            pendingAutomatic = false;
+            resolvingAutomatic = false;
             SessionState.EraseString(PendingCommandKey);
             SessionState.EraseString(PendingWarningKey);
+            SessionState.EraseBool(PendingAutomaticKey);
         }
     }
 }

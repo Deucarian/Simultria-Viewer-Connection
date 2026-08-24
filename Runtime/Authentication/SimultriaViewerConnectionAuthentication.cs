@@ -45,8 +45,43 @@ namespace Deucarian.SimultriaViewerConnection
             out string error,
             IApiClient apiClient = null)
         {
+            if (developmentProfile?.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion)
+            {
+                registration = null;
+                environmentStatus = null;
+                error = "Resolve the automatic Simultria environment before " +
+                        "registering authentication.";
+                return false;
+            }
+
             return TryRegister(
                 developmentProfile,
+                developmentProfile == null
+                    ? default(ApiEnvironmentId)
+                    : developmentProfile.EnvironmentId,
+                DefaultTargetId,
+                DefaultDisplayName,
+                session,
+                out registration,
+                out environmentStatus,
+                out error,
+                apiClient);
+        }
+
+        public static bool TryRegister(
+            SimultriaViewerDevelopmentProfile developmentProfile,
+            ApiEnvironmentId effectiveEnvironmentId,
+            IViewerAuthenticationSession session,
+            out IDisposable registration,
+            out ApiEnvironmentStatus environmentStatus,
+            out string error,
+            IApiClient apiClient = null)
+        {
+            return TryRegister(
+                developmentProfile,
+                effectiveEnvironmentId,
                 DefaultTargetId,
                 DefaultDisplayName,
                 session,
@@ -66,6 +101,42 @@ namespace Deucarian.SimultriaViewerConnection
             out string error,
             IApiClient apiClient = null)
         {
+            if (developmentProfile?.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion)
+            {
+                registration = null;
+                environmentStatus = null;
+                error = "Resolve the automatic Simultria environment before " +
+                        "registering authentication.";
+                return false;
+            }
+
+            return TryRegister(
+                developmentProfile,
+                developmentProfile == null
+                    ? default(ApiEnvironmentId)
+                    : developmentProfile.EnvironmentId,
+                targetId,
+                displayName,
+                session,
+                out registration,
+                out environmentStatus,
+                out error,
+                apiClient);
+        }
+
+        private static bool TryRegister(
+            SimultriaViewerDevelopmentProfile developmentProfile,
+            ApiEnvironmentId effectiveEnvironmentId,
+            string targetId,
+            string displayName,
+            IViewerAuthenticationSession session,
+            out IDisposable registration,
+            out ApiEnvironmentStatus environmentStatus,
+            out string error,
+            IApiClient apiClient)
+        {
             registration = null;
             if (developmentProfile == null)
             {
@@ -80,7 +151,7 @@ namespace Deucarian.SimultriaViewerConnection
             {
                 return TryRegister(
                     connectionProfile,
-                    developmentProfile.EnvironmentId,
+                    effectiveEnvironmentId,
                     targetId,
                     displayName,
                     session,
@@ -94,7 +165,7 @@ namespace Deucarian.SimultriaViewerConnection
                 developmentProfile.EffectiveApiProfile;
             return TryRegister(
                 legacyProfile,
-                developmentProfile.EnvironmentId,
+                effectiveEnvironmentId,
                 targetId,
                 displayName,
                 session,

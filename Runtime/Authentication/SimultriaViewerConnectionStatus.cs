@@ -23,15 +23,41 @@ namespace Deucarian.SimultriaViewerConnection
         public static SimultriaViewerConnectionStatus Capture(
             SimultriaViewerDevelopmentProfile profile)
         {
+            if (profile?.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion)
+            {
+                profile.TryResolveEnvironment(
+                    out ApiEnvironmentStatus unresolved,
+                    out string resolutionMessage);
+                return new SimultriaViewerConnectionStatus(
+                    unresolved,
+                    resolutionMessage,
+                    null);
+            }
+
+            return Capture(
+                profile,
+                profile == null
+                    ? default(Deucarian.API.Models.ApiEnvironmentId)
+                    : profile.EnvironmentId);
+        }
+
+        public static SimultriaViewerConnectionStatus Capture(
+            SimultriaViewerDevelopmentProfile profile,
+            Deucarian.API.Models.ApiEnvironmentId effectiveEnvironmentId)
+        {
             ApiEnvironmentStatus environment = null;
             string environmentMessage =
                 "No Simultria viewer development profile is selected.";
             profile?.TryResolveEnvironment(
+                effectiveEnvironmentId,
                 out environment,
                 out environmentMessage);
             ViewerAuthenticationStatusSnapshot authentication = null;
             if (TryResolveAuthenticationTarget(
                     profile,
+                    effectiveEnvironmentId,
                     out ViewerAuthenticationTarget authenticationTarget,
                     out _))
             {
@@ -58,6 +84,31 @@ namespace Deucarian.SimultriaViewerConnection
             out ViewerAuthenticationTarget target,
             out string error)
         {
+            if (profile?.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion)
+            {
+                target = null;
+                error = "Resolve the automatic Simultria environment before " +
+                        "validating its authentication target.";
+                return false;
+            }
+
+            return TryResolveAuthenticationTarget(
+                profile,
+                profile == null
+                    ? default(Deucarian.API.Models.ApiEnvironmentId)
+                    : profile.EnvironmentId,
+                out target,
+                out error);
+        }
+
+        internal static bool TryResolveAuthenticationTarget(
+            SimultriaViewerDevelopmentProfile profile,
+            Deucarian.API.Models.ApiEnvironmentId effectiveEnvironmentId,
+            out ViewerAuthenticationTarget target,
+            out string error)
+        {
             var targets = ViewerAuthenticationTargetRegistry.Targets;
             if (targets.Count != 1)
             {
@@ -72,9 +123,7 @@ namespace Deucarian.SimultriaViewerConnection
             if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
                     target,
                     profile,
-                    profile == null
-                        ? default(Deucarian.API.Models.ApiEnvironmentId)
-                        : profile.EnvironmentId,
+                    effectiveEnvironmentId,
                     out error))
             {
                 target = null;

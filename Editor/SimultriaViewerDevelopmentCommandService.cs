@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using Deucarian.API.Core;
+using Deucarian.API.Models;
 using Deucarian.Simultria.API.Models;
 using Deucarian.Simultria.API.Services;
 using Deucarian.ViewerAuthentication;
@@ -32,14 +33,85 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return false;
             }
 
+            return TryCreateCommand(
+                profile,
+                profile.EnvironmentId,
+                out command,
+                out error);
+        }
+
+        internal static bool TryCreateCommand(
+            SimultriaViewerDevelopmentProfile profile,
+            ApiEnvironmentId effectiveEnvironmentId,
+            out CommandEnvelope command,
+            out string error)
+        {
+            command = null;
+            if (profile == null)
+            {
+                error = "A Simultria viewer development profile is required.";
+                return false;
+            }
+
+            if (!profile.TryResolveEnvironment(
+                    effectiveEnvironmentId,
+                    out ApiEnvironmentStatus _,
+                    out error))
+            {
+                return false;
+            }
+
             long revision = Math.Max(1L, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            if (!profile.TryCreatePayload(revision, out var payload, out error))
+            if (!profile.TryCreatePayload(
+                    revision,
+                    effectiveEnvironmentId,
+                    out var payload,
+                    out error))
             {
                 return false;
             }
 
             command = SimultriaViewerInitializationCommand.Create(payload);
             return true;
+        }
+
+        internal static async Task<DevelopmentCommandCreation>
+            CreateCommandAsync(
+                SimultriaViewerDevelopmentProfile profile,
+                SimultriaViewerEnvironmentResolver resolver,
+                CancellationToken cancellationToken)
+        {
+            if (profile == null)
+            {
+                return DevelopmentCommandCreation.Failure(
+                    null,
+                    "A Simultria viewer development profile is required.");
+            }
+
+            if (resolver == null)
+            {
+                return DevelopmentCommandCreation.Failure(
+                    null,
+                    "A Simultria viewer environment resolver is required.");
+            }
+
+            SimultriaViewerEnvironmentResolution resolution =
+                await resolver.ResolveAsync(profile, cancellationToken);
+            if (resolution?.Succeeded != true)
+            {
+                return DevelopmentCommandCreation.Failure(
+                    resolution,
+                    resolution?.Message ??
+                    "The effective Simultria environment could not be resolved.");
+            }
+
+            return TryCreateCommand(
+                    profile,
+                    resolution.EnvironmentId,
+                    out CommandEnvelope command,
+                    out string error)
+                ? DevelopmentCommandCreation.Success(command, resolution)
+                : DevelopmentCommandCreation.Failure(resolution, error);
         }
 
         public static bool TryResolveLivePort(
@@ -205,10 +277,18 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     payloadError);
             }
 
-            if (!string.Equals(
+            if (!ApiEnvironmentId.TryParse(
                     payload.EnvironmentId,
-                    profile.EnvironmentId.Value,
-                    StringComparison.Ordinal))
+                    out ApiEnvironmentId effectiveEnvironmentId))
+            {
+                return LiveCommandPreparation.Failure(
+                    "development_context_changed",
+                    "The prepared command has no valid Simultria environment.");
+            }
+
+            if (profile.EnvironmentResolutionMode ==
+                    SimultriaViewerEnvironmentResolutionMode.Manual &&
+                effectiveEnvironmentId != profile.EnvironmentId)
             {
                 return LiveCommandPreparation.Failure(
                     "development_context_changed",
@@ -219,7 +299,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             if (!SimultriaViewerConnectionAuthentication.TryValidateTarget(
                     authenticationTarget,
                     profile,
-                    profile.EnvironmentId,
+                    effectiveEnvironmentId,
                     out string authenticationError))
             {
                 return LiveCommandPreparation.Failure(
@@ -242,7 +322,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             var resolver = new SimultriaViewerModelResolver(
                 apiClient,
                 composition,
-                profile.EnvironmentId);
+                effectiveEnvironmentId);
             SimultriaViewerModelResolveResult resolved =
                 await resolver.ResolveAsync(
                     payload.ProjectId,
@@ -361,6 +441,44 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     false,
                     null,
                     errorCode,
+                    message);
+        }
+
+        internal sealed class DevelopmentCommandCreation
+        {
+            private DevelopmentCommandCreation(
+                bool succeeded,
+                CommandEnvelope command,
+                SimultriaViewerEnvironmentResolution resolution,
+                string message)
+            {
+                Succeeded = succeeded;
+                Command = command;
+                Resolution = resolution;
+                Message = message;
+            }
+
+            internal bool Succeeded { get; }
+            internal CommandEnvelope Command { get; }
+            internal SimultriaViewerEnvironmentResolution Resolution { get; }
+            internal string Message { get; }
+
+            internal static DevelopmentCommandCreation Success(
+                CommandEnvelope command,
+                SimultriaViewerEnvironmentResolution resolution) =>
+                new DevelopmentCommandCreation(
+                    true,
+                    command,
+                    resolution,
+                    null);
+
+            internal static DevelopmentCommandCreation Failure(
+                SimultriaViewerEnvironmentResolution resolution,
+                string message) =>
+                new DevelopmentCommandCreation(
+                    false,
+                    null,
+                    resolution,
                     message);
         }
     }
