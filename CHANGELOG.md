@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0] - 2026-08-24
+
+### Added
+
+- Added optional portal-driven environment resolution using the public
+  Simultria Unity build-version directory.
+- Added injectable Unity build metadata and structured, credential-free
+  resolution results for viewer integrations and tests.
+
+### Changed
+
+- Development profiles can now choose explicit manual resolution or automatic
+  build-version resolution without introducing a second mapping asset.
+- Initialization payload creation accepts an explicitly resolved environment so
+  authentication and commands can share one authoritative selection.
+
+### Security
+
+- Automatic resolution fails closed for missing configuration, lookup errors,
+  response mismatches, unknown backend environment names, and unconfigured
+  target environments. It never assumes Production.
+
 ## [0.3.1] - 2026-08-20
 
 - Replaced the hard-coded environment dropdown with `SimultriaEnvironmentDescriptors.Standard`

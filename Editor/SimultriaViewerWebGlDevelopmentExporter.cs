@@ -24,6 +24,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return false;
             }
 
+            return TryExport(command, out message);
+        }
+
+        internal static bool TryExport(
+            CommandEnvelope command,
+            out string message)
+        {
+            if (command == null)
+            {
+                message = "A resolved initialization command is required.";
+                return false;
+            }
+
             try
             {
                 string fullPath = ToProjectPath(ExportAssetPath);

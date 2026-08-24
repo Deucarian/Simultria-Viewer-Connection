@@ -78,5 +78,25 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 Is.EqualTo($"Custom ({custom.Value})"));
             Assert.That(values[selectedIndex], Is.EqualTo(custom));
         }
+
+        [Test]
+        public void BuildDirectoryOptionsRequireAnExplicitHostEnvironment()
+        {
+            SimultriaViewerConnectionWindow.BuildDirectoryEnvironmentOptions(
+                default(ApiEnvironmentId),
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int selectedIndex);
+
+            Assert.That(selectedIndex, Is.Zero);
+            Assert.That(values[0].IsEmpty, Is.True);
+            Assert.That(options[0], Does.StartWith("Choose"));
+            Assert.That(
+                values.Skip(1).ToArray(),
+                Is.EqualTo(
+                    SimultriaEnvironmentDescriptors.Standard
+                        .Select(descriptor => descriptor.EnvironmentId)
+                        .ToArray()));
+        }
     }
 }

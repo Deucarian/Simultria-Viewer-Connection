@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
 using System.Threading;
+using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using Deucarian.Editor;
 using Deucarian.API.Core;
@@ -19,6 +20,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private string message = string.Empty;
         private DeucarianEditorStatus messageStatus = DeucarianEditorStatus.Info;
         private bool sending;
+        private CancellationTokenSource operationCancellation;
 
         [MenuItem("Tools/Deucarian/Viewer/Simultria Connection")]
         public static void Open()
@@ -32,11 +34,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private void OnEnable()
         {
             ViewerAuthenticationTargetRegistry.TargetsChanged += Repaint;
+            SimultriaViewerEditorAuthenticationHost
+                .EnvironmentResolutionChanged += Repaint;
+            SimultriaViewerEditorAuthenticationHost.RequestRefresh();
         }
 
         private void OnDisable()
         {
             ViewerAuthenticationTargetRegistry.TargetsChanged -= Repaint;
+            SimultriaViewerEditorAuthenticationHost
+                .EnvironmentResolutionChanged -= Repaint;
+            operationCancellation?.Cancel();
+            operationCancellation?.Dispose();
+            operationCancellation = null;
         }
 
         private void OnGUI()
@@ -69,7 +79,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                     DeucarianEditorChrome.DrawFooterVersion(
                         "Simultria Viewer Connection",
-                        "0.3.1");
+                        "0.4.0");
                 }
 
                 GUILayout.Space(12f);
@@ -85,8 +95,20 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 out SimultriaViewerDevelopmentProfile profile,
                 out string source,
                 out string selectionError);
-            SimultriaViewerConnectionStatus status =
-                SimultriaViewerConnectionStatus.Capture(profile);
+            bool environmentSelected =
+                SimultriaViewerEditorAuthenticationHost
+                    .TryGetEffectiveEnvironment(
+                        profile,
+                        out ApiEnvironmentId effectiveEnvironment,
+                        out SimultriaViewerEnvironmentResolution resolution,
+                        out string resolutionMessage);
+            SimultriaViewerConnectionStatus status = environmentSelected
+                ? SimultriaViewerConnectionStatus.Capture(
+                    profile,
+                    effectiveEnvironment)
+                : SimultriaViewerConnectionStatus.Capture(
+                    profile,
+                    default(ApiEnvironmentId));
             bool commandRouteReady =
                 SimultriaViewerDevelopmentCommandService.TryResolveCommandRoute(
                     out _,
@@ -102,12 +124,34 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 ApiEnvironmentStatus environment = status.Environment;
                 DrawStatusRow(
                     "Environment",
-                    environment?.IsResolved == true
+                    environmentSelected && environment?.IsResolved == true
                         ? environment.DisplayName
-                        : status.EnvironmentMessage ?? selectionError,
-                    environment?.IsResolved == true
+                        : resolutionMessage ?? status.EnvironmentMessage ??
+                          selectionError,
+                    environmentSelected && environment?.IsResolved == true
                         ? DeucarianEditorStatus.Success
                         : DeucarianEditorStatus.Warning);
+
+                if (profile?.EnvironmentResolutionMode ==
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion)
+                {
+                    DrawStatusRow(
+                        "Build input",
+                        resolution?.BuildVersion ??
+                        ResolveDisplayedBuildVersion(profile),
+                        string.IsNullOrWhiteSpace(
+                            resolution?.BuildVersion ??
+                            ResolveDisplayedBuildVersion(profile))
+                            ? DeucarianEditorStatus.Warning
+                            : DeucarianEditorStatus.Info);
+                    DrawStatusRow(
+                        "Resolution",
+                        resolution?.Source ?? "Simultria Unity build directory",
+                        resolution?.Succeeded == true
+                            ? DeucarianEditorStatus.Success
+                            : DeucarianEditorStatus.Info);
+                }
 
                 ViewerAuthenticationStatusSnapshot authentication = status.Authentication;
                 DrawStatusRow(
@@ -230,7 +274,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                         }
                     }
                 },
-                "No endpoint URL, token, login route, or product-specific fields are stored here.");
+                "No endpoint URL, token, credential, header, or authentication route is stored here.");
         }
 
         private static void DrawRuntimeTargets()
@@ -288,16 +332,12 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 {
                     if (DeucarianEditorButtons.Secondary("Preview command", hasProfile))
                     {
-                        Preview(profile);
+                        PreviewAsync(profile);
                     }
 
                     if (DeucarianEditorButtons.Secondary("Export local WebGL", hasProfile))
                     {
-                        SetResult(
-                            SimultriaViewerWebGlDevelopmentExporter.TryExport(
-                                profile,
-                                out string exportMessage),
-                            exportMessage);
+                        ExportAsync(profile);
                     }
 
                     if (DeucarianEditorButtons.Secondary("Clear export"))
@@ -336,23 +376,26 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private async void SendAsync(SimultriaViewerDevelopmentProfile profile)
         {
-            if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
-                    profile,
-                    out CommandEnvelope command,
-                    out string error))
-            {
-                SetResult(false, error);
-                return;
-            }
-
             sending = true;
             Repaint();
             try
             {
+                SimultriaViewerDevelopmentCommandService
+                    .DevelopmentCommandCreation creation =
+                    await CreateCommandAsync(profile);
+                if (creation?.Succeeded != true)
+                {
+                    SetResult(
+                        false,
+                        creation?.Message ??
+                        "The effective environment could not be resolved.");
+                    return;
+                }
+
                 CommandResult result = await
                     SimultriaViewerDevelopmentCommandService.DispatchAsync(
-                        command,
-                        CancellationToken.None);
+                        creation.Command,
+                        operationCancellation?.Token ?? CancellationToken.None);
                 SetResult(
                     result?.Succeeded == true,
                     result?.Succeeded == true
@@ -372,20 +415,69 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
         }
 
-        private void Preview(SimultriaViewerDevelopmentProfile profile)
+        private async void PreviewAsync(
+            SimultriaViewerDevelopmentProfile profile)
         {
-            if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
-                    profile,
-                    out CommandEnvelope command,
-                    out string error))
+            SimultriaViewerDevelopmentCommandService.DevelopmentCommandCreation
+                creation = await CreateCommandAsync(profile);
+            if (creation?.Succeeded != true)
             {
                 preview = string.Empty;
-                SetResult(false, error);
+                SetResult(
+                    false,
+                    creation?.Message ??
+                    "The effective environment could not be resolved.");
                 return;
             }
 
-            preview = SimultriaViewerInitializationCommand.Serialize(command);
+            preview = SimultriaViewerInitializationCommand.Serialize(
+                creation.Command);
             SetResult(true, "Preview contains IDs and placement only; no credentials or endpoint URLs.");
+        }
+
+        private async void ExportAsync(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            SimultriaViewerDevelopmentCommandService.DevelopmentCommandCreation
+                creation = await CreateCommandAsync(profile);
+            if (creation?.Succeeded != true)
+            {
+                SetResult(
+                    false,
+                    creation?.Message ??
+                    "The effective environment could not be resolved.");
+                return;
+            }
+
+            SetResult(
+                SimultriaViewerWebGlDevelopmentExporter.TryExport(
+                    creation.Command,
+                    out string exportMessage),
+                exportMessage);
+        }
+
+        private async Task<SimultriaViewerDevelopmentCommandService
+            .DevelopmentCommandCreation> CreateCommandAsync(
+                SimultriaViewerDevelopmentProfile profile)
+        {
+            operationCancellation?.Cancel();
+            operationCancellation?.Dispose();
+            operationCancellation = new CancellationTokenSource();
+            try
+            {
+                return await SimultriaViewerDevelopmentCommandService
+                    .CreateCommandAsync(
+                        profile,
+                        SimultriaViewerEnvironmentResolver.CreateDefault(),
+                        operationCancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return SimultriaViewerDevelopmentCommandService
+                    .DevelopmentCommandCreation.Failure(
+                        null,
+                        "Environment resolution was canceled.");
+            }
         }
 
         private static void CreateProfile()
@@ -415,20 +507,41 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             SimultriaViewerDevelopmentProfile profile,
             string source)
         {
+            SimultriaViewerEnvironmentResolutionMode mode =
+                (SimultriaViewerEnvironmentResolutionMode)
+                EditorGUILayout.EnumPopup(
+                    "Resolution",
+                    profile.EnvironmentResolutionMode);
+            if (mode != profile.EnvironmentResolutionMode)
+            {
+                profile.EnvironmentResolutionMode = mode;
+                SaveProfileAndRefresh(profile);
+            }
+
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("Environment source", source);
                 EditorGUILayout.LabelField(
-                    profile == null || profile.EnvironmentId.IsEmpty
-                        ? "Development (fallback)"
-                        : profile.EnvironmentId.Value,
+                    mode == SimultriaViewerEnvironmentResolutionMode.Manual
+                        ? (profile.EnvironmentId.IsEmpty
+                            ? "Development (fallback)"
+                            : profile.EnvironmentId.Value)
+                        : "Simultria Unity build directory",
                     EditorStyles.miniLabel);
             }
 
-            if (profile == null)
+            if (mode == SimultriaViewerEnvironmentResolutionMode.Manual)
             {
+                DrawManualEnvironmentChooser(profile);
                 return;
             }
+
+            DrawAutomaticEnvironmentChooser(profile);
+        }
+
+        private static void DrawManualEnvironmentChooser(
+            SimultriaViewerDevelopmentProfile profile)
+        {
 
             ApiEnvironmentId current = profile.EnvironmentId;
             BuildEnvironmentOptions(
@@ -444,9 +557,52 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
 
             profile.EnvironmentId = values[selected];
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssets();
-            SimultriaViewerEditorAuthenticationHost.RequestRefresh();
+            SaveProfileAndRefresh(profile);
+        }
+
+        private static void DrawAutomaticEnvironmentChooser(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            BuildDirectoryEnvironmentOptions(
+                profile.BuildDirectoryEnvironmentId,
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int currentIndex);
+            int selected = EditorGUILayout.Popup(
+                "Build directory host",
+                currentIndex,
+                options);
+            string product = EditorGUILayout.TextField(
+                "Build product",
+                profile.BuildProduct);
+            string buildOverride = EditorGUILayout.TextField(
+                "Version override",
+                profile.BuildVersionOverride);
+            bool changed = selected != currentIndex ||
+                           !string.Equals(
+                               product,
+                               profile.BuildProduct,
+                               StringComparison.Ordinal) ||
+                           !string.Equals(
+                               buildOverride,
+                               profile.BuildVersionOverride,
+                               StringComparison.Ordinal);
+            if (changed)
+            {
+                profile.BuildDirectoryEnvironmentId = values[selected];
+                profile.BuildProduct = product;
+                profile.BuildVersionOverride = buildOverride;
+                SaveProfileAndRefresh(profile);
+            }
+
+            EditorGUILayout.LabelField(
+                string.IsNullOrWhiteSpace(profile.BuildVersionOverride)
+                    ? "Runtime version: " + Application.version
+                    : "Using the explicit local/editor version override.",
+                EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(
+                "The selected API environment supplies only the build-directory host. The portal response chooses the effective viewer environment.",
+                EditorStyles.wordWrappedMiniLabel);
         }
 
         internal static void BuildEnvironmentOptions(
@@ -482,6 +638,46 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             options = optionLabels.ToArray();
             values = optionValues.ToArray();
+        }
+
+        internal static void BuildDirectoryEnvironmentOptions(
+            ApiEnvironmentId current,
+            out string[] options,
+            out ApiEnvironmentId[] values,
+            out int selectedIndex)
+        {
+            BuildEnvironmentOptions(
+                current,
+                out string[] canonicalLabels,
+                out ApiEnvironmentId[] canonicalValues,
+                out int canonicalIndex);
+            options = new string[canonicalLabels.Length + 1];
+            values = new ApiEnvironmentId[canonicalValues.Length + 1];
+            options[0] = "Choose configured environment...";
+            Array.Copy(canonicalLabels, 0, options, 1, canonicalLabels.Length);
+            Array.Copy(canonicalValues, 0, values, 1, canonicalValues.Length);
+            selectedIndex = current.IsEmpty ? 0 : canonicalIndex + 1;
+        }
+
+        private static void SaveProfileAndRefresh(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+            SimultriaViewerEditorAuthenticationHost.RequestRefresh();
+        }
+
+        private static string ResolveDisplayedBuildVersion(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            if (profile == null)
+            {
+                return string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(profile.BuildVersionOverride)
+                ? Application.version
+                : profile.BuildVersionOverride;
         }
 
         private void SetResult(bool succeeded, string resultMessage)
