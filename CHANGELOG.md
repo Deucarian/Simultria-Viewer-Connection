@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.1] - 2026-08-24
+
+### Added
+
+- Added a public credential-free WebGL export overload for a caller-owned,
+  already resolved development environment.
+
+### Fixed
+
+- Automatic runtime routing no longer prevents consumers from exporting an
+  explicitly selected manual environment for local development builds.
+
 ## [0.4.0] - 2026-08-24
 
 ### Added
