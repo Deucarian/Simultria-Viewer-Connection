@@ -296,6 +296,13 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static bool refreshScheduled;
         private static bool shuttingDown;
         private static int testSuspensionCount;
+        private static CancellationTokenSource environmentResolutionCancellation;
+        private static SimultriaViewerDevelopmentProfile environmentResolutionProfile;
+        private static SimultriaViewerEnvironmentResolution environmentResolution;
+        private static string environmentResolutionKey;
+        private static bool environmentResolutionInFlight;
+
+        internal static event Action EnvironmentResolutionChanged;
 
         static SimultriaViewerEditorAuthenticationHost()
         {
@@ -312,11 +319,17 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             RequestRefresh();
         }
 
-        internal static void RequestRefresh()
+        internal static void RequestRefresh(
+            bool invalidateEnvironmentResolution = true)
         {
             if (shuttingDown)
             {
                 return;
+            }
+
+            if (invalidateEnvironmentResolution)
+            {
+                InvalidateEnvironmentResolution();
             }
 
             Lease.Invalidate();
@@ -340,17 +353,26 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     out _,
                     out _))
             {
+                if (!TryGetEffectiveEnvironment(
+                        profile,
+                        out Deucarian.API.Models.ApiEnvironmentId environmentId,
+                        out _,
+                        out _))
+                {
+                    return null;
+                }
+
                 if (profile.ConnectionProfileReference != null)
                 {
                     return new
                         SimultriaViewerEditorAuthenticationConfiguration(
                             profile.ConnectionProfileReference,
-                            profile.EnvironmentId);
+                            environmentId);
                 }
 
                 return new SimultriaViewerEditorAuthenticationConfiguration(
                     profile.EffectiveApiProfile,
-                    profile.EnvironmentId);
+                    environmentId);
             }
 
             SimultriaApiProfile defaultProfile =
@@ -364,7 +386,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private static void OnRegistrationsChanged()
         {
-            RequestRefresh();
+            RequestRefresh(invalidateEnvironmentResolution: false);
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
@@ -413,9 +435,196 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return;
             }
 
-            Lease.Reconcile(
-                testSuspensionCount > 0 ||
-                EditorApplication.isPlayingOrWillChangePlaymode);
+            bool suspended = testSuspensionCount > 0 ||
+                             EditorApplication.isPlayingOrWillChangePlaymode;
+            if (suspended)
+            {
+                Lease.Reconcile(suspendForPlayMode: true);
+                return;
+            }
+
+            if (SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                    out SimultriaViewerDevelopmentProfile profile,
+                    out _,
+                    out _) &&
+                profile.EnvironmentResolutionMode ==
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion &&
+                !TryGetEffectiveEnvironment(
+                    profile,
+                    out _,
+                    out _,
+                    out _))
+            {
+                Lease.Reconcile(suspendForPlayMode: true);
+                StartEnvironmentResolution(profile);
+                return;
+            }
+
+            Lease.Reconcile(suspendForPlayMode: false);
+        }
+
+        internal static bool TryGetEffectiveEnvironment(
+            SimultriaViewerDevelopmentProfile profile,
+            out Deucarian.API.Models.ApiEnvironmentId environmentId,
+            out SimultriaViewerEnvironmentResolution resolution,
+            out string message)
+        {
+            environmentId = default(Deucarian.API.Models.ApiEnvironmentId);
+            resolution = null;
+            if (profile == null)
+            {
+                message = "No Simultria viewer development profile is selected.";
+                return false;
+            }
+
+            if (profile.EnvironmentResolutionMode ==
+                SimultriaViewerEnvironmentResolutionMode.Manual)
+            {
+                environmentId = profile.EnvironmentId;
+                message = null;
+                return true;
+            }
+
+            string key = BuildEnvironmentResolutionKey(profile);
+            if (!ReferenceEquals(environmentResolutionProfile, profile) ||
+                !string.Equals(
+                    environmentResolutionKey,
+                    key,
+                    StringComparison.Ordinal))
+            {
+                message = "Resolving the environment from the Simultria " +
+                          "Unity build directory.";
+                return false;
+            }
+
+            resolution = environmentResolution;
+            if (resolution?.Succeeded != true)
+            {
+                message = environmentResolutionInFlight
+                    ? "Resolving the environment from the Simultria Unity " +
+                      "build directory."
+                    : resolution?.Message ??
+                      "The automatic environment has not been resolved.";
+                return false;
+            }
+
+            environmentId = resolution.EnvironmentId;
+            message = null;
+            return true;
+        }
+
+        private static void StartEnvironmentResolution(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            if (profile == null || environmentResolutionInFlight ||
+                testSuspensionCount > 0)
+            {
+                return;
+            }
+
+            string key = BuildEnvironmentResolutionKey(profile);
+            if (ReferenceEquals(environmentResolutionProfile, profile) &&
+                string.Equals(
+                    environmentResolutionKey,
+                    key,
+                    StringComparison.Ordinal) &&
+                environmentResolution != null)
+            {
+                return;
+            }
+
+            environmentResolutionCancellation?.Cancel();
+            environmentResolutionCancellation?.Dispose();
+            environmentResolutionCancellation = new CancellationTokenSource();
+            environmentResolutionProfile = profile;
+            environmentResolutionKey = key;
+            environmentResolution = null;
+            environmentResolutionInFlight = true;
+            ResolveEnvironmentAsync(
+                profile,
+                key,
+                environmentResolutionCancellation.Token);
+        }
+
+        private static async void ResolveEnvironmentAsync(
+            SimultriaViewerDevelopmentProfile profile,
+            string key,
+            CancellationToken cancellationToken)
+        {
+            SimultriaViewerEnvironmentResolution result;
+            try
+            {
+                result = await SimultriaViewerEnvironmentResolver
+                    .CreateDefault()
+                    .ResolveAsync(profile, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                result = SimultriaViewerEnvironmentResolution.Failure(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    profile == null ? null : profile.BuildVersionOverride,
+                    profile == null ? null : profile.BuildProduct,
+                    "environment_resolution_failed",
+                    "Automatic environment resolution failed (" +
+                    exception.GetType().Name + ").");
+            }
+
+            if (shuttingDown || cancellationToken.IsCancellationRequested ||
+                profile == null ||
+                !ReferenceEquals(environmentResolutionProfile, profile) ||
+                !string.Equals(
+                    environmentResolutionKey,
+                    key,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    BuildEnvironmentResolutionKey(profile),
+                    key,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            environmentResolution = result;
+            environmentResolutionInFlight = false;
+            Lease.Invalidate();
+            EnvironmentResolutionChanged?.Invoke();
+            ReconcileNow();
+        }
+
+        private static string BuildEnvironmentResolutionKey(
+            SimultriaViewerDevelopmentProfile profile)
+        {
+            if (profile == null)
+            {
+                return string.Empty;
+            }
+
+            ScriptableObject connection = profile.EffectiveProfileReference;
+            return profile.GetInstanceID() + "|" +
+                   (int)profile.EnvironmentResolutionMode + "|" +
+                   profile.BuildDirectoryEnvironmentId.Value + "|" +
+                   profile.BuildProduct + "|" +
+                   profile.BuildVersionOverride + "|" +
+                   Application.version + "|" +
+                   (connection == null ? 0 : connection.GetInstanceID());
+        }
+
+        private static void InvalidateEnvironmentResolution()
+        {
+            environmentResolutionCancellation?.Cancel();
+            environmentResolutionCancellation?.Dispose();
+            environmentResolutionCancellation = null;
+            environmentResolutionProfile = null;
+            environmentResolution = null;
+            environmentResolutionKey = null;
+            environmentResolutionInFlight = false;
+            EnvironmentResolutionChanged?.Invoke();
         }
 
         private static void RebindRememberedTokenOwner(
@@ -448,6 +657,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             EditorApplication.update -= OnEditorUpdate;
             EditorApplication.quitting -= Shutdown;
             AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
+            InvalidateEnvironmentResolution();
             Lease.Dispose();
         }
 
@@ -464,7 +674,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                 disposed = true;
                 testSuspensionCount = Math.Max(0, testSuspensionCount - 1);
-                RequestRefresh();
+                RequestRefresh(invalidateEnvironmentResolution: false);
             }
         }
     }

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Deucarian.API.Authentication;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
+using Deucarian.API.Models;
 using Deucarian.Simultria.API.Authentication;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.SimultriaViewerConnection.Editor;
@@ -614,6 +615,50 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void EditorLeaseRebindsWhenEffectiveEnvironmentChanges()
+        {
+            SimultriaApiProfile apiProfile = configuredLegacyProfile;
+            ApiEnvironmentId selectedEnvironment =
+                SimultriaEnvironmentIds.Development;
+            var attemptedEnvironments = new List<ApiEnvironmentId>();
+            var registrations = new List<RecordingDisposable>();
+            var lease = new SimultriaViewerEditorAuthenticationLease(
+                () => new SimultriaViewerEditorAuthenticationConfiguration(
+                    apiProfile,
+                    selectedEnvironment),
+                registerTarget: (configuration, _) =>
+                {
+                    attemptedEnvironments.Add(configuration.EnvironmentId);
+                    var registration = new RecordingDisposable();
+                    registrations.Add(registration);
+                    return registration;
+                });
+            try
+            {
+                lease.Reconcile(suspendForPlayMode: false);
+                selectedEnvironment = SimultriaEnvironmentIds.Testing;
+                lease.Invalidate();
+                lease.Reconcile(suspendForPlayMode: false);
+
+                Assert.That(
+                    attemptedEnvironments,
+                    Is.EqualTo(new[]
+                    {
+                        SimultriaEnvironmentIds.Development,
+                        SimultriaEnvironmentIds.Testing
+                    }));
+                Assert.That(registrations[0].Disposed, Is.True);
+                Assert.That(registrations[1].Disposed, Is.False);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+
+            Assert.That(registrations[1].Disposed, Is.True);
+        }
+
+        [Test]
         public async Task RuntimeLifetimeClearsAndReleasesWhenRegistrationThrows()
         {
             ViewerAuthenticationSession session =
@@ -637,6 +682,16 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             public void Dispose()
             {
                 throw new InvalidOperationException("Subscriber failed.");
+            }
+        }
+
+        private sealed class RecordingDisposable : IDisposable
+        {
+            internal bool Disposed { get; private set; }
+
+            public void Dispose()
+            {
+                Disposed = true;
             }
         }
 

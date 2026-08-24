@@ -21,6 +21,24 @@ namespace Deucarian.SimultriaViewerConnection
         [SerializeField] private ApiEnvironmentId environmentId =
             SimultriaEnvironmentIds.Development;
         [Tooltip(
+            "Manual uses the selected environment. Automatic asks the " +
+            "Simultria Unity build directory which environment owns this build.")]
+        [SerializeField] private SimultriaViewerEnvironmentResolutionMode
+            environmentResolutionMode;
+        [Tooltip(
+            "API environment whose configured host exposes the public Unity " +
+            "build directory. Required for automatic resolution; no " +
+            "Production fallback is assumed.")]
+        [SerializeField] private ApiEnvironmentId buildDirectoryEnvironmentId;
+        [Tooltip(
+            "Product identifier used by the Simultria Unity build directory, " +
+            "for example a portal-defined viewer product key.")]
+        [SerializeField] private string buildProduct = string.Empty;
+        [Tooltip(
+            "Optional local/editor override. Leave blank to use " +
+            "Application.version at runtime.")]
+        [SerializeField] private string buildVersionOverride = string.Empty;
+        [Tooltip(
             "Project-owned generic API connection. Hosts remain editable " +
             "in that asset and are never stored in this development profile.")]
         [SerializeField] private ApiConnectionProfile
@@ -45,6 +63,31 @@ namespace Deucarian.SimultriaViewerConnection
                 ? SimultriaEnvironmentIds.Development
                 : environmentId;
             set => environmentId = value;
+        }
+
+        public SimultriaViewerEnvironmentResolutionMode
+            EnvironmentResolutionMode
+        {
+            get => environmentResolutionMode;
+            set => environmentResolutionMode = value;
+        }
+
+        public ApiEnvironmentId BuildDirectoryEnvironmentId
+        {
+            get => buildDirectoryEnvironmentId;
+            set => buildDirectoryEnvironmentId = value;
+        }
+
+        public string BuildProduct
+        {
+            get => buildProduct ?? string.Empty;
+            set => buildProduct = value ?? string.Empty;
+        }
+
+        public string BuildVersionOverride
+        {
+            get => buildVersionOverride ?? string.Empty;
+            set => buildVersionOverride = value ?? string.Empty;
         }
 
         /// <summary>
@@ -138,6 +181,24 @@ namespace Deucarian.SimultriaViewerConnection
             out string error)
         {
             status = null;
+            if (environmentResolutionMode !=
+                SimultriaViewerEnvironmentResolutionMode.Manual)
+            {
+                error = "Automatic environment resolution must complete " +
+                        "through SimultriaViewerEnvironmentResolver before " +
+                        "the effective environment can be used.";
+                return false;
+            }
+
+            return TryResolveEnvironment(EnvironmentId, out status, out error);
+        }
+
+        public bool TryResolveEnvironment(
+            ApiEnvironmentId effectiveEnvironmentId,
+            out ApiEnvironmentStatus status,
+            out string error)
+        {
+            status = null;
             if (!TryCreateComposition(
                     out ApiComposition composition,
                     out error))
@@ -145,7 +206,7 @@ namespace Deucarian.SimultriaViewerConnection
                 return false;
             }
 
-            status = composition.GetEnvironmentStatus(EnvironmentId);
+            status = composition.GetEnvironmentStatus(effectiveEnvironmentId);
             error = status.Message;
             return status.IsResolved;
         }
@@ -189,6 +250,28 @@ namespace Deucarian.SimultriaViewerConnection
             out SimultriaViewerInitializationPayload payload,
             out string error)
         {
+            if (environmentResolutionMode !=
+                SimultriaViewerEnvironmentResolutionMode.Manual)
+            {
+                payload = null;
+                error = "Resolve the automatic environment before creating " +
+                        "an initialization payload.";
+                return false;
+            }
+
+            return TryCreatePayload(
+                revision,
+                EnvironmentId,
+                out payload,
+                out error);
+        }
+
+        public bool TryCreatePayload(
+            long revision,
+            ApiEnvironmentId effectiveEnvironmentId,
+            out SimultriaViewerInitializationPayload payload,
+            out string error)
+        {
             payload = null;
             if (revision <= 0)
             {
@@ -208,6 +291,12 @@ namespace Deucarian.SimultriaViewerConnection
                 return false;
             }
 
+            if (effectiveEnvironmentId.IsEmpty)
+            {
+                error = "An effective Simultria environment is required.";
+                return false;
+            }
+
             if (!TryParseMetadata(out JToken metadata, out error))
             {
                 return false;
@@ -216,7 +305,7 @@ namespace Deucarian.SimultriaViewerConnection
             payload = new SimultriaViewerInitializationPayload
             {
                 Revision = revision,
-                EnvironmentId = EnvironmentId.Value,
+                EnvironmentId = effectiveEnvironmentId.Value,
                 ProjectId = projectId,
                 ModelId = modelId,
                 ModelVersionId = modelVersionId > 0 ? (int?)modelVersionId : null,

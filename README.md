@@ -24,7 +24,7 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 1.4.2,
-Simultria API 0.3.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
+Simultria API 0.4.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
 
 ## Development profile
 
@@ -34,8 +34,12 @@ Create a profile from:
 
 The profile stores only:
 
-- optional serializable `ApiEnvironmentId` and a project-owned generic
+- an explicit Manual or Automatic-from-Unity-build-version mode;
+- a manual `ApiEnvironmentId` and a project-owned generic
   `ApiConnectionProfile` reference;
+- for automatic mode only, the environment whose configured host exposes the
+  public build directory, the portal product ID, and an optional local/editor
+  build-version override;
 - a legacy `SimultriaApiProfile` reference retained for existing serialized
   assets (the package default is used only when both references are empty);
 - project, model, and optional model-version IDs;
@@ -46,6 +50,25 @@ The profile stores only:
 It has no base URL, access token, credentials, login/validation route, Report
 marker/media/command data, or historical `is_default_context` flag. Secret-like
 metadata keys are rejected recursively.
+
+### Environment resolution
+
+Manual mode preserves the existing behavior: an empty environment ID means
+Development, while an explicitly authored custom ID remains intact and is
+accepted when the connection profile configures it.
+
+Automatic mode uses `Application.version` unless the profile supplies an
+explicit local/editor override. It calls the public Simultria route
+`GET /api/v2/unity/builds/versions/{id}/{product}` through the profile's
+explicitly selected build-directory environment. The backend response is the
+only build-to-environment mapping. This package does not create a duplicate
+rules asset or store a build-to-environment table.
+
+The lookup fails closed when the build version, product, directory environment,
+response identity, backend environment name, or resolved target environment is
+missing or invalid. There is deliberately no implicit Production host or
+Production fallback. Deployment hosts remain solely in the project-owned API
+connection profile.
 
 Create the referenced connection from:
 
@@ -66,6 +89,7 @@ gitignored `UserSettings` and does not change the shared default.
 The window uses the shared Deucarian Editor chrome and shows:
 
 - the selected profile source;
+- the automatic build input and resolution source when enabled;
 - sanitized resolved Simultria environment status;
 - sanitized Viewer Authentication status; and
 - whether the scene's canonical command ingress is ready.
@@ -77,7 +101,8 @@ It never displays or serializes an access token.
 The package registers one editor-lifetime Viewer Authentication target backed
 by a private transient session and a resolved Simultria API provider. A
 selected development profile overrides its API composition and environment;
-when none is selected, the credential-free Simultria API package profile and
+automatic profiles register only after their portal result has resolved. When
+none is selected, the credential-free Simultria API package profile and
 `simultria.development` are used. Project and model IDs are never required
 merely to sign in or refresh authentication. This makes the shared
 `Tools > Deucarian > Viewer > Authentication` window usable outside Play Mode
@@ -131,6 +156,13 @@ session's authenticated API client and adds the generic `model_url` and
 `model_version` fields. Resolution failure fails closed. Bearer values are
 never copied into the command or URL query, and bearer-like URL query fields
 are rejected.
+
+Automatic mode resolves the effective environment before command creation.
+That exact environment ID is written to `initialize_viewer`, used to validate
+the authentication binding, and used for model resolution. The synchronous
+payload and registration overloads intentionally reject an unresolved
+automatic profile; consumers pass the explicit result from
+`SimultriaViewerEnvironmentResolver.ResolveAsync` instead.
 
 Before that request, the package verifies that the sole target is the stable
 `simultria-viewer` target and is backed by the same Simultria provider, API
@@ -214,6 +246,29 @@ Mode and Play Mode keep the same stable identity:
 SimultriaViewerConnectionAuthentication.TryRegister(
     apiConnectionProfile,
     environmentId,
+    authenticationSession,
+    out IDisposable authenticationRegistration,
+    out ApiEnvironmentStatus environmentStatus,
+    out string error);
+```
+
+For automatic mode, resolve first and pass the same effective environment to
+each consumer:
+
+```csharp
+SimultriaViewerEnvironmentResolution resolution =
+    await SimultriaViewerEnvironmentResolver.CreateDefault()
+        .ResolveAsync(developmentProfile, cancellationToken);
+
+if (!resolution.Succeeded)
+{
+    // Show resolution.Message and stop; never choose a fallback environment.
+    return;
+}
+
+SimultriaViewerConnectionAuthentication.TryRegister(
+    developmentProfile,
+    resolution.EnvironmentId,
     authenticationSession,
     out IDisposable authenticationRegistration,
     out ApiEnvironmentStatus environmentStatus,
