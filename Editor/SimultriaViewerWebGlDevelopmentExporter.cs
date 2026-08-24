@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Deucarian.API.Models;
 using Deucarian.CommandRouting;
 using UnityEditor;
 using UnityEngine;
@@ -18,6 +19,28 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         {
             if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
                     profile,
+                    out CommandEnvelope command,
+                    out message))
+            {
+                return false;
+            }
+
+            return TryExport(command, out message);
+        }
+
+        /// <summary>
+        /// Exports a credential-free command for an environment that was
+        /// already selected by the owning development workflow. This keeps a
+        /// local development build independent from automatic runtime routing.
+        /// </summary>
+        public static bool TryExport(
+            SimultriaViewerDevelopmentProfile profile,
+            ApiEnvironmentId effectiveEnvironmentId,
+            out string message)
+        {
+            if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
+                    profile,
+                    effectiveEnvironmentId,
                     out CommandEnvelope command,
                     out message))
             {

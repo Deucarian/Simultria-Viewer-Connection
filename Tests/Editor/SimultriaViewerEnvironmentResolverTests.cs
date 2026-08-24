@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.API;
@@ -109,6 +110,37 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             Assert.That(
                 payload.EnvironmentId,
                 Is.EqualTo(SimultriaEnvironmentIds.Testing.Value));
+        }
+
+        [Test]
+        public void ExplicitDevelopmentExportDoesNotReResolveAutomaticProfile()
+        {
+            ConfigureAutomaticProfile();
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            string exportPath = Path.GetFullPath(Path.Combine(
+                projectRoot ?? string.Empty,
+                SimultriaViewerWebGlDevelopmentExporter.ExportAssetPath));
+            try
+            {
+                bool exported = SimultriaViewerWebGlDevelopmentExporter
+                    .TryExport(
+                        profile,
+                        SimultriaEnvironmentIds.Testing,
+                        out string message);
+
+                Assert.That(exported, Is.True, message);
+                string json = File.ReadAllText(exportPath);
+                Assert.That(
+                    json,
+                    Does.Contain("\"environment_id\""));
+                Assert.That(json, Does.Contain("\"simultria.testing\""));
+                Assert.That(json, Does.Not.Contain("access_token"));
+                Assert.That(json, Does.Not.Contain("base_url"));
+            }
+            finally
+            {
+                SimultriaViewerWebGlDevelopmentExporter.TryClear(out _);
+            }
         }
 
         [Test]
