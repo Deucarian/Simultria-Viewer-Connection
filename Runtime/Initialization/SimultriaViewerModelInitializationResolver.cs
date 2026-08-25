@@ -112,7 +112,8 @@ namespace Deucarian.SimultriaViewerConnection
                 SimultriaViewerInitializationPayload payload,
                 CancellationToken cancellationToken = default)
         {
-            if (payload == null || !payload.IsValid(out string error))
+            string error = null;
+            if (payload == null || !payload.IsValid(out error))
             {
                 return SimultriaViewerModelInitializationResolution.Failure(
                     "invalid_payload",
