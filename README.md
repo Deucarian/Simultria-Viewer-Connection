@@ -172,11 +172,13 @@ The package emits `initialize_viewer` with a typed payload:
 ```
 
 The stored preview/export remains URL-free. Immediately before a live local
-dispatch, the package resolves the selected model version with the sole live
-session's authenticated API client and adds the generic `model_url` and
-`model_version` fields. Resolution failure fails closed. Bearer values are
-never copied into the command or URL query, and bearer-like URL query fields
-are rejected.
+dispatch, `SimultriaViewerModelInitializationResolver` resolves the selected
+model version with the sole live session's authenticated API client and adds
+the generic `model_url` and `model_version` fields. Player products call that
+same resolver from their typed initialization handler, so Editor and compiled
+builds share one project/model/version policy. Resolution failure fails closed.
+Host-provided model URLs are ignored; bearer values are never copied into the
+command or URL query, and bearer-like URL query fields are rejected.
 
 Automatic mode resolves the effective environment before command creation.
 That exact environment ID is written to `initialize_viewer`, used to validate
