@@ -11,7 +11,7 @@ namespace Deucarian.SimultriaViewerConnection
         public const string CommandName = "initialize_viewer";
         public const string DevelopmentSource = "simultria-development-profile";
         public const string DevelopmentTransport = "editor-local";
-        public const string DevelopmentRemoteEndpoint = "development-profile";
+        public const string DevelopmentRemoteEndpoint = "direct";
 
         public static CommandEnvelope Create(
             SimultriaViewerInitializationPayload payload,

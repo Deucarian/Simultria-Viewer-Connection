@@ -49,6 +49,9 @@ namespace Deucarian.SimultriaViewerConnection
         [SerializeField] private SimultriaApiProfile apiProfileReference;
         [SerializeField] private int projectId;
         [SerializeField] private int modelId;
+        [Tooltip(
+            "Use 0 to load the model's active version. Use a positive ID " +
+            "to pin that exact model version.")]
         [SerializeField] private int modelVersionId;
         [SerializeField] private Vector3 placementPosition;
         [SerializeField] private Vector3 placementRotationEuler;
@@ -139,6 +142,10 @@ namespace Deucarian.SimultriaViewerConnection
             set => modelId = value;
         }
 
+        /// <summary>
+        /// Zero selects the model's active version. A positive value pins the
+        /// exact version with that ID.
+        /// </summary>
         public int ModelVersionId
         {
             get => modelVersionId;
@@ -288,6 +295,13 @@ namespace Deucarian.SimultriaViewerConnection
             if (modelId <= 0)
             {
                 error = "Model ID must be positive.";
+                return false;
+            }
+
+            if (modelVersionId < 0)
+            {
+                error = "Model version ID must be zero for the active version " +
+                        "or a positive exact version ID.";
                 return false;
             }
 

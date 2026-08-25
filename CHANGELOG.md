@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.5] - 2026-08-25
+
+### Fixed
+
+- Route Editor-local viewer initialization through the direct WebGL response
+  endpoint so loading and lifecycle events reach the running viewer transport.
+- Define zero as active-version selection, preserve positive exact version
+  pins, and reject negative version values in development profiles.
+- Require Simultria API 0.4.1 so standalone consumers use active model-version
+  resolution for development-profile initialization.
+
 ## [0.4.4] - 2026-08-25
 
 ### Fixed
