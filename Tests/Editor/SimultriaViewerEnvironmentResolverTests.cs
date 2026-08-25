@@ -26,6 +26,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [SetUp]
         public void SetUp()
         {
+            SimultriaViewerRuntimeEnvironment.ResetForLifecycle();
             hostSuspension =
                 SimultriaViewerEditorAuthenticationHost.SuspendForTests();
             profile = Own(
@@ -50,6 +51,144 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             }
 
             ownedObjects.Clear();
+            SimultriaViewerRuntimeEnvironment.ResetForLifecycle();
+        }
+
+        [TestCase("development")]
+        [TestCase("testing")]
+        [TestCase("acceptance")]
+        [TestCase("production")]
+        public async Task PlayerBuildUsesCompiledVersionAndBackendAssignment(
+            string backendEnvironment)
+        {
+            ApiConnectionProfile connection = CreateConnectionProfile(
+                SimultriaEnvironmentIds.Development,
+                SimultriaEnvironmentIds.Testing,
+                SimultriaEnvironmentIds.Acceptance,
+                SimultriaEnvironmentIds.Production);
+            SimultriaViewerBuildConfiguration configuration = Own(
+                ScriptableObject.CreateInstance<
+                    SimultriaViewerBuildConfiguration>());
+            configuration.ConnectionProfile = connection;
+            configuration.BuildDirectoryEnvironmentId =
+                SimultriaEnvironmentIds.Development;
+            configuration.Product = "design_and_sales";
+
+            profile.EnvironmentResolutionMode =
+                SimultriaViewerEnvironmentResolutionMode.Manual;
+            profile.EnvironmentId = SimultriaEnvironmentIds.Development;
+            profile.BuildVersionOverride = "editor-only-version";
+            profile.BuildProduct = "editor-only-product";
+
+            var client = BuildDirectoryClient.Success(
+                "compiled-7.4.2",
+                "design_and_sales",
+                backendEnvironment);
+            var resolver = new SimultriaViewerEnvironmentResolver(
+                client,
+                new FixedBuildMetadataProvider("compiled-7.4.2"),
+                new FixedRuntimeContext(false, "Activity Viewer"));
+
+            SimultriaViewerEnvironmentResolution result =
+                await resolver.ResolveForCurrentRuntimeAsync(
+                    configuration,
+                    profile);
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(
+                result.EnvironmentId,
+                Is.EqualTo(EnvironmentIdFor(backendEnvironment)));
+            Assert.That(result.BuildVersion, Is.EqualTo("compiled-7.4.2"));
+            Assert.That(result.Product, Is.EqualTo("design_and_sales"));
+            Assert.That(result.RuntimeKind, Is.EqualTo(
+                SimultriaViewerRuntimeKind.Build));
+            Assert.That(result.EditorOverrideActive, Is.False);
+            Assert.That(result.ApplicationName, Is.EqualTo("Activity Viewer"));
+            Assert.That(
+                client.LastEndpoint.Path,
+                Does.EndWith(
+                    "/api/v2/unity/builds/versions/compiled-7.4.2/" +
+                    "design_and_sales"));
+        }
+
+        [TestCase("development")]
+        [TestCase("testing")]
+        [TestCase("acceptance")]
+        [TestCase("production")]
+        public async Task EditorManualOverrideSupportsStandardEnvironments(
+            string environment)
+        {
+            profile.ConnectionProfileReference = CreateConnectionProfile(
+                SimultriaEnvironmentIds.Development,
+                SimultriaEnvironmentIds.Testing,
+                SimultriaEnvironmentIds.Acceptance,
+                SimultriaEnvironmentIds.Production);
+            profile.EnvironmentResolutionMode =
+                SimultriaViewerEnvironmentResolutionMode.Manual;
+            profile.EnvironmentId = EnvironmentIdFor(environment);
+            profile.BuildProduct = "design_and_sales";
+            var client = new BuildDirectoryClient();
+            var resolver = new SimultriaViewerEnvironmentResolver(
+                client,
+                new FixedBuildMetadataProvider("editor-version"),
+                new FixedRuntimeContext(true, "Report Viewer"));
+
+            SimultriaViewerEnvironmentResolution result =
+                await resolver.ResolveForCurrentRuntimeAsync(
+                    null,
+                    profile);
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(
+                result.EnvironmentId,
+                Is.EqualTo(EnvironmentIdFor(environment)));
+            Assert.That(result.RuntimeKind, Is.EqualTo(
+                SimultriaViewerRuntimeKind.Editor));
+            Assert.That(result.EditorOverrideActive, Is.True);
+            Assert.That(client.RequestCount, Is.Zero);
+        }
+
+        [Test]
+        public void ActiveRuntimeEnvironmentCannotChangeMidSession()
+        {
+            SimultriaViewerEnvironmentResolution first =
+                SimultriaViewerEnvironmentResolution.Success(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    SimultriaEnvironmentIds.Testing,
+                    "build-1",
+                    "design_and_sales",
+                    "directory",
+                    SimultriaViewerRuntimeKind.Build,
+                    "Viewer",
+                    false);
+            SimultriaViewerEnvironmentResolution promoted =
+                SimultriaViewerEnvironmentResolution.Success(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    SimultriaEnvironmentIds.Production,
+                    "build-1",
+                    "design_and_sales",
+                    "directory",
+                    SimultriaViewerRuntimeKind.Build,
+                    "Viewer",
+                    false);
+
+            Assert.That(
+                SimultriaViewerRuntimeEnvironment.TryActivate(
+                    first,
+                    out string firstError),
+                Is.True,
+                firstError);
+            Assert.That(
+                SimultriaViewerRuntimeEnvironment.TryActivate(
+                    promoted,
+                    out string secondError),
+                Is.False);
+            Assert.That(secondError, Does.Contain("already fixed"));
+            Assert.That(
+                SimultriaViewerRuntimeEnvironment.Current.EnvironmentId,
+                Is.EqualTo(SimultriaEnvironmentIds.Testing));
         }
 
         [Test]
@@ -68,7 +207,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             Assert.That(
                 result.EnvironmentId,
                 Is.EqualTo(SimultriaEnvironmentIds.Development));
-            Assert.That(result.Source, Is.EqualTo("Manual profile selection"));
+            Assert.That(result.Source, Is.EqualTo("Explicit Editor override"));
             Assert.That(client.RequestCount, Is.Zero);
         }
 
@@ -451,6 +590,23 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             return instance;
         }
 
+        private static ApiEnvironmentId EnvironmentIdFor(string value)
+        {
+            switch (value)
+            {
+                case "development":
+                    return SimultriaEnvironmentIds.Development;
+                case "testing":
+                    return SimultriaEnvironmentIds.Testing;
+                case "acceptance":
+                    return SimultriaEnvironmentIds.Acceptance;
+                case "production":
+                    return SimultriaEnvironmentIds.Production;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(value));
+            }
+        }
+
         private sealed class FixedBuildMetadataProvider :
             ISimultriaViewerBuildMetadataProvider
         {
@@ -460,6 +616,20 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             }
 
             public string BuildVersion { get; }
+        }
+
+        private sealed class FixedRuntimeContext :
+            ISimultriaViewerRuntimeContext
+        {
+            internal FixedRuntimeContext(bool isEditor, string applicationName)
+            {
+                IsEditor = isEditor;
+                ApplicationName = applicationName;
+            }
+
+            public bool IsEditor { get; }
+
+            public string ApplicationName { get; }
         }
 
         private sealed class BuildDirectoryClient : IApiClient

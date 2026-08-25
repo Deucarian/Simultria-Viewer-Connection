@@ -305,6 +305,16 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static void RegisterRuntimeConnectionProvider()
         {
             ReleaseRuntimeConnectionProvider();
+            if (UnityEngine.Object.FindFirstObjectByType<
+                    SimultriaViewerBuildConnectionGate>(
+                    UnityEngine.FindObjectsInactive.Include) != null)
+            {
+                // The scene gate owns both environment resolution and the
+                // runtime provider. The Editor auto-loader still dispatches
+                // the optional development command after startup opens.
+                return;
+            }
+
             if (!SimultriaViewerConnectionProjectSettings.instance
                     .AutoLoadInPlayMode ||
                 pendingAutomatic ||

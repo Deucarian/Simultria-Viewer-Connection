@@ -10,55 +10,282 @@ using UnityEngine;
 
 namespace Deucarian.SimultriaViewerConnection
 {
-    /// <summary>Reads the Unity build version from the running application.</summary>
+    /// <summary>Reads immutable identity from the running Unity application.</summary>
     public sealed class SimultriaViewerApplicationBuildMetadataProvider :
-        ISimultriaViewerBuildMetadataProvider
+        ISimultriaViewerBuildMetadataProvider,
+        ISimultriaViewerRuntimeContext
     {
         public string BuildVersion => Application.version;
+
+        public bool IsEditor => Application.isEditor;
+
+        public string ApplicationName => Application.productName;
     }
 
     /// <summary>
     /// Resolves one effective environment without storing deployment hosts,
     /// credentials, or a second environment mapping in the viewer package.
+    /// Editor profiles may select an explicit environment. Player builds are
+    /// always resolved from Application.version and the build configuration.
     /// </summary>
     public sealed class SimultriaViewerEnvironmentResolver
     {
         private readonly IApiClient apiClient;
         private readonly ISimultriaViewerBuildMetadataProvider metadataProvider;
+        private readonly ISimultriaViewerRuntimeContext runtimeContext;
 
         public SimultriaViewerEnvironmentResolver(
             IApiClient apiClient,
             ISimultriaViewerBuildMetadataProvider metadataProvider)
+            : this(
+                apiClient,
+                metadataProvider,
+                metadataProvider as ISimultriaViewerRuntimeContext ??
+                new SimultriaViewerApplicationBuildMetadataProvider())
+        {
+        }
+
+        public SimultriaViewerEnvironmentResolver(
+            IApiClient apiClient,
+            ISimultriaViewerBuildMetadataProvider metadataProvider,
+            ISimultriaViewerRuntimeContext runtimeContext)
         {
             this.apiClient = apiClient;
             this.metadataProvider = metadataProvider ??
                 throw new ArgumentNullException(nameof(metadataProvider));
+            this.runtimeContext = runtimeContext ??
+                throw new ArgumentNullException(nameof(runtimeContext));
         }
 
         /// <summary>Creates the normal Unity-backed resolver.</summary>
         public static SimultriaViewerEnvironmentResolver CreateDefault()
         {
+            var application =
+                new SimultriaViewerApplicationBuildMetadataProvider();
             return new SimultriaViewerEnvironmentResolver(
                 ApiClientFactory.CreateDefault(),
-                new SimultriaViewerApplicationBuildMetadataProvider());
+                application,
+                application);
         }
 
         /// <summary>
-        /// Resolves the manual selection or asks the public Simultria build
-        /// directory for the environment assigned to this build.
+        /// Returns the generic connection paired with the same runtime input
+        /// used by ResolveForCurrentRuntimeAsync. Player
+        /// builds can only receive the build configuration connection.
         /// </summary>
-        public async Task<SimultriaViewerEnvironmentResolution> ResolveAsync(
+        public bool TryResolveConnectionProfileForCurrentRuntime(
+            SimultriaViewerBuildConfiguration buildConfiguration,
+            out Deucarian.API.Configuration.ApiConnectionProfile
+                connectionProfile,
+            out string error)
+        {
+#if UNITY_EDITOR
+            if (runtimeContext.IsEditor)
+            {
+                if (!SimultriaViewerEditorProfileProvider.TryResolve(
+                        out SimultriaViewerDevelopmentProfile editorProfile,
+                        out _,
+                        out error))
+                {
+                    connectionProfile = null;
+                    return false;
+                }
+
+                connectionProfile = editorProfile.ConnectionProfileReference;
+                if (connectionProfile == null)
+                {
+                    error = "The selected Editor override must reference a " +
+                            "generic API connection profile.";
+                    return false;
+                }
+
+                error = string.Empty;
+                return true;
+            }
+#endif
+
+            connectionProfile = buildConfiguration?.ConnectionProfile;
+            error = connectionProfile == null
+                ? "The player build configuration has no API connection " +
+                  "profile."
+                : string.Empty;
+            return connectionProfile != null;
+        }
+
+        /// <summary>
+        /// Resolves the project/user Editor profile in the Editor and the
+        /// immutable build configuration in an actual player build.
+        /// </summary>
+        public Task<SimultriaViewerEnvironmentResolution>
+            ResolveForCurrentRuntimeAsync(
+                SimultriaViewerBuildConfiguration buildConfiguration,
+                CancellationToken cancellationToken =
+                    default(CancellationToken))
+        {
+#if UNITY_EDITOR
+            if (runtimeContext.IsEditor)
+            {
+                return ResolveForCurrentRuntimeAsync(
+                    buildConfiguration,
+                    null,
+                    cancellationToken);
+            }
+#endif
+            return ResolveBuildConfigurationAsync(
+                buildConfiguration,
+                cancellationToken);
+        }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// The explicit Editor profile parameter exists for tests and custom
+        /// Editor hosts. It is never read when the runtime is a player build.
+        /// </summary>
+        public Task<SimultriaViewerEnvironmentResolution>
+            ResolveForCurrentRuntimeAsync(
+                SimultriaViewerBuildConfiguration buildConfiguration,
+                SimultriaViewerDevelopmentProfile editorProfile,
+                CancellationToken cancellationToken =
+                    default(CancellationToken))
+        {
+            if (!runtimeContext.IsEditor)
+            {
+                return ResolveBuildConfigurationAsync(
+                    buildConfiguration,
+                    cancellationToken);
+            }
+
+            string source = "Explicit Editor override";
+            if (editorProfile == null &&
+                !SimultriaViewerEditorProfileProvider.TryResolve(
+                    out editorProfile,
+                    out source,
+                    out string providerError))
+            {
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode.Manual,
+                    CurrentBuildVersion(),
+                    buildConfiguration?.Product,
+                    "editor_profile_unavailable",
+                    providerError,
+                    true));
+            }
+
+            return ResolveEditorProfileAsync(
+                editorProfile,
+                source,
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Backward-compatible Editor profile entry point. This API and the
+        /// development-profile type are absent from player compilation.
+        /// </summary>
+        public Task<SimultriaViewerEnvironmentResolution> ResolveAsync(
             SimultriaViewerDevelopmentProfile profile,
             CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (runtimeContext.IsEditor)
+            {
+                return ResolveEditorProfileAsync(
+                    profile,
+                    "Explicit Editor override",
+                    cancellationToken);
+            }
+
             if (profile == null)
             {
-                return Failure(
-                    SimultriaViewerEnvironmentResolutionMode.Manual,
-                    null,
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    CurrentBuildVersion(),
                     null,
                     "profile_missing",
-                    "A Simultria viewer development profile is required.");
+                    "A Simultria viewer profile is required for the build " +
+                    "directory lookup.",
+                    false));
+            }
+
+            if (!profile.TryCreateComposition(
+                    out ApiComposition composition,
+                    out string compositionError))
+            {
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    CurrentBuildVersion(),
+                    profile.BuildProduct,
+                    "api_composition_unavailable",
+                    compositionError,
+                    false));
+            }
+
+            return ResolveAutomaticAsync(
+                composition,
+                profile.BuildDirectoryEnvironmentId,
+                CurrentBuildVersion(),
+                profile.BuildProduct,
+                false,
+                cancellationToken);
+        }
+#endif
+
+        private Task<SimultriaViewerEnvironmentResolution>
+            ResolveBuildConfigurationAsync(
+                SimultriaViewerBuildConfiguration configuration,
+                CancellationToken cancellationToken)
+        {
+            if (configuration == null)
+            {
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    CurrentBuildVersion(),
+                    null,
+                    "build_configuration_missing",
+                    "A Simultria viewer build configuration is required.",
+                    false));
+            }
+
+            if (!configuration.TryCreateComposition(
+                    out ApiComposition composition,
+                    out string compositionError))
+            {
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode
+                        .AutomaticFromUnityBuildVersion,
+                    CurrentBuildVersion(),
+                    configuration.Product,
+                    "api_composition_unavailable",
+                    compositionError,
+                    false));
+            }
+
+            return ResolveAutomaticAsync(
+                composition,
+                configuration.BuildDirectoryEnvironmentId,
+                CurrentBuildVersion(),
+                configuration.Product,
+                false,
+                cancellationToken);
+        }
+
+#if UNITY_EDITOR
+        private Task<SimultriaViewerEnvironmentResolution>
+            ResolveEditorProfileAsync(
+                SimultriaViewerDevelopmentProfile profile,
+                string source,
+                CancellationToken cancellationToken)
+        {
+            if (profile == null)
+            {
+                return Task.FromResult(Failure(
+                    SimultriaViewerEnvironmentResolutionMode.Manual,
+                    CurrentBuildVersion(),
+                    null,
+                    "profile_missing",
+                    "A Simultria viewer development profile is required.",
+                    true));
             }
 
             SimultriaViewerEnvironmentResolutionMode mode =
@@ -67,36 +294,64 @@ namespace Deucarian.SimultriaViewerConnection
                     out ApiComposition composition,
                     out string compositionError))
             {
-                return Failure(
+                return Task.FromResult(Failure(
                     mode,
-                    ResolveBuildVersion(profile),
+                    ResolveEditorBuildVersion(profile),
                     profile.BuildProduct,
                     "api_composition_unavailable",
-                    compositionError);
+                    compositionError,
+                    mode == SimultriaViewerEnvironmentResolutionMode.Manual));
             }
 
             if (mode == SimultriaViewerEnvironmentResolutionMode.Manual)
             {
-                ApiEnvironmentId manualEnvironment = profile.EnvironmentId;
+                ApiEnvironmentId environment = profile.EnvironmentId;
                 ApiEnvironmentStatus status =
-                    composition.GetEnvironmentStatus(manualEnvironment);
-                return status.IsResolved
+                    composition.GetEnvironmentStatus(environment);
+                return Task.FromResult(status.IsResolved
                     ? SimultriaViewerEnvironmentResolution.Success(
                         mode,
-                        manualEnvironment,
-                        string.Empty,
-                        string.Empty,
-                        "Manual profile selection")
+                        environment,
+                        CurrentBuildVersion(),
+                        profile.BuildProduct.Trim(),
+                        string.IsNullOrWhiteSpace(source)
+                            ? "Editor environment override"
+                            : source,
+                        SimultriaViewerRuntimeKind.Editor,
+                        ApplicationName(),
+                        true)
                     : Failure(
                         mode,
-                        null,
-                        null,
+                        CurrentBuildVersion(),
+                        profile.BuildProduct,
                         "manual_environment_unavailable",
-                        status.Message);
+                        status.Message,
+                        true));
             }
 
-            string buildVersion = ResolveBuildVersion(profile);
-            string product = profile.BuildProduct.Trim();
+            return ResolveAutomaticAsync(
+                composition,
+                profile.BuildDirectoryEnvironmentId,
+                ResolveEditorBuildVersion(profile),
+                profile.BuildProduct,
+                false,
+                cancellationToken);
+        }
+#endif
+
+        private async Task<SimultriaViewerEnvironmentResolution>
+            ResolveAutomaticAsync(
+                ApiComposition composition,
+                ApiEnvironmentId directoryEnvironment,
+                string buildVersion,
+                string productValue,
+                bool editorOverrideActive,
+                CancellationToken cancellationToken)
+        {
+            const SimultriaViewerEnvironmentResolutionMode mode =
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion;
+            string product = (productValue ?? string.Empty).Trim();
             if (string.IsNullOrWhiteSpace(buildVersion))
             {
                 return Failure(
@@ -104,7 +359,9 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_version_missing",
-                    "Automatic environment resolution requires a Unity build version.");
+                    "Automatic environment resolution requires a Unity " +
+                    "build version.",
+                    editorOverrideActive);
             }
 
             if (string.IsNullOrWhiteSpace(product))
@@ -114,11 +371,11 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_product_missing",
-                    "Automatic environment resolution requires a Simultria build product.");
+                    "Automatic environment resolution requires a canonical " +
+                    "Simultria build product.",
+                    editorOverrideActive);
             }
 
-            ApiEnvironmentId directoryEnvironment =
-                profile.BuildDirectoryEnvironmentId;
             if (directoryEnvironment.IsEmpty)
             {
                 return Failure(
@@ -126,7 +383,9 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_directory_environment_missing",
-                    "Choose the configured API environment that hosts the Simultria Unity build directory.");
+                    "Choose the configured API environment that hosts the " +
+                    "Simultria Unity build directory.",
+                    editorOverrideActive);
             }
 
             ApiEnvironmentStatus directoryStatus =
@@ -138,7 +397,8 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_directory_environment_unavailable",
-                    directoryStatus.Message);
+                    directoryStatus.Message,
+                    editorOverrideActive);
             }
 
             if (apiClient == null)
@@ -148,7 +408,9 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_directory_client_missing",
-                    "A generic API client is required for automatic environment resolution.");
+                    "A generic API client is required for automatic " +
+                    "environment resolution.",
+                    editorOverrideActive);
             }
 
             ApiResult<SimultriaResourceResponse<SimultriaUnityBuildVersionDto>>
@@ -176,7 +438,8 @@ namespace Deucarian.SimultriaViewerConnection
                     product,
                     "build_directory_lookup_failed",
                     "The Simultria Unity build directory lookup failed (" +
-                    exception.GetType().Name + ").");
+                    exception.GetType().Name + ").",
+                    editorOverrideActive);
             }
 
             if (lookup?.IsSuccess != true || lookup.Data?.Data == null)
@@ -186,7 +449,8 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_directory_lookup_failed",
-                    BuildLookupFailureMessage(lookup));
+                    BuildLookupFailureMessage(lookup),
+                    editorOverrideActive);
             }
 
             SimultriaUnityBuildVersionDto response = lookup.Data.Data;
@@ -200,7 +464,9 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_version_mismatch",
-                    "The Simultria Unity build directory returned a different build version.");
+                    "The Simultria Unity build directory returned a " +
+                    "different build version. No fallback version was used.",
+                    editorOverrideActive);
             }
 
             if (!string.Equals(
@@ -213,7 +479,9 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_product_mismatch",
-                    "The Simultria Unity build directory returned a different product.");
+                    "The Simultria Unity build directory returned a " +
+                    "different product.",
+                    editorOverrideActive);
             }
 
             if (!SimultriaBuildEnvironmentNameMapper.TryMap(
@@ -226,7 +494,8 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "build_environment_unknown",
-                    mappingError);
+                    mappingError,
+                    editorOverrideActive);
             }
 
             ApiEnvironmentStatus resolvedStatus =
@@ -238,7 +507,8 @@ namespace Deucarian.SimultriaViewerConnection
                     buildVersion,
                     product,
                     "resolved_environment_unavailable",
-                    resolvedStatus.Message);
+                    resolvedStatus.Message,
+                    editorOverrideActive);
             }
 
             return SimultriaViewerEnvironmentResolution.Success(
@@ -246,24 +516,41 @@ namespace Deucarian.SimultriaViewerConnection
                 resolvedEnvironment,
                 buildVersion,
                 product,
-                "Simultria Unity build directory");
+                "Simultria Unity build directory",
+                RuntimeKind(),
+                ApplicationName(),
+                editorOverrideActive);
         }
 
-        private string ResolveBuildVersion(
+#if UNITY_EDITOR
+        private string ResolveEditorBuildVersion(
             SimultriaViewerDevelopmentProfile profile)
         {
             string configured = profile.BuildVersionOverride;
             return string.IsNullOrWhiteSpace(configured)
-                ? (metadataProvider.BuildVersion ?? string.Empty).Trim()
+                ? CurrentBuildVersion()
                 : configured.Trim();
         }
+#endif
 
-        private static SimultriaViewerEnvironmentResolution Failure(
+        private string CurrentBuildVersion() =>
+            (metadataProvider.BuildVersion ?? string.Empty).Trim();
+
+        private string ApplicationName() =>
+            (runtimeContext.ApplicationName ?? string.Empty).Trim();
+
+        private SimultriaViewerRuntimeKind RuntimeKind() =>
+            runtimeContext.IsEditor
+                ? SimultriaViewerRuntimeKind.Editor
+                : SimultriaViewerRuntimeKind.Build;
+
+        private SimultriaViewerEnvironmentResolution Failure(
             SimultriaViewerEnvironmentResolutionMode mode,
             string buildVersion,
             string product,
             string errorCode,
-            string message)
+            string message,
+            bool editorOverrideActive)
         {
             return SimultriaViewerEnvironmentResolution.Failure(
                 mode,
@@ -271,8 +558,12 @@ namespace Deucarian.SimultriaViewerConnection
                 product,
                 errorCode,
                 string.IsNullOrWhiteSpace(message)
-                    ? "The effective Simultria environment could not be resolved."
-                    : message);
+                    ? "The effective Simultria environment could not be " +
+                      "resolved."
+                    : message,
+                RuntimeKind(),
+                ApplicationName(),
+                editorOverrideActive);
         }
 
         private static string BuildLookupFailureMessage(
@@ -280,9 +571,10 @@ namespace Deucarian.SimultriaViewerConnection
                 result)
         {
             return result?.HttpStatusCode.HasValue == true
-                ? "The Simultria Unity build directory rejected the lookup (HTTP " +
-                  result.HttpStatusCode.Value + ")."
-                : "The Simultria Unity build directory lookup did not return a usable response.";
+                ? "The Simultria Unity build directory rejected the lookup " +
+                  "(HTTP " + result.HttpStatusCode.Value + ")."
+                : "The Simultria Unity build directory lookup did not return " +
+                  "a usable response.";
         }
     }
 }

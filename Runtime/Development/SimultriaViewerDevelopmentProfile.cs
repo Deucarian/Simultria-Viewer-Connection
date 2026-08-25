@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
+#if UNITY_EDITOR
 namespace Deucarian.SimultriaViewerConnection
 {
     /// <summary>
@@ -371,3 +372,4 @@ namespace Deucarian.SimultriaViewerConnection
         }
     }
 }
+#endif

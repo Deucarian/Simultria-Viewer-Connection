@@ -33,6 +33,7 @@ namespace Deucarian.SimultriaViewerConnection
 
         public const string DefaultDisplayName = "Simultria Viewer";
 
+#if UNITY_EDITOR
         /// <summary>
         /// Registers a single-viewer runtime session using the package's
         /// stable target identity.
@@ -174,6 +175,7 @@ namespace Deucarian.SimultriaViewerConnection
                 out error,
                 apiClient);
         }
+#endif
 
         /// <summary>
         /// Registers a single-viewer runtime session from a project-owned
@@ -436,6 +438,7 @@ namespace Deucarian.SimultriaViewerConnection
                     "The authenticated API client factory returned no client.");
         }
 
+#if UNITY_EDITOR
         internal static bool TryValidateTarget(
             ViewerAuthenticationTarget target,
             SimultriaApiProfile expectedProfile,
@@ -504,6 +507,7 @@ namespace Deucarian.SimultriaViewerConnection
                 expectedEnvironmentId,
                 out error);
         }
+#endif
 
         private static bool TryValidateTarget(
             ViewerAuthenticationTarget target,
