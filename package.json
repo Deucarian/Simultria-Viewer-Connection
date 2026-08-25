@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.simultria-viewer-connection",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "displayName": "Deucarian Simultria Viewer Connection",
   "description": "Optional Simultria environment, authentication, and development-context connection for Deucarian viewers.",
   "unity": "6000.0",
@@ -25,7 +25,7 @@
     "com.deucarian.editor": "1.0.5",
     "com.deucarian.logging": "1.0.2",
     "com.deucarian.session": "1.0.6",
-    "com.deucarian.simultria-api": "0.4.0",
+    "com.deucarian.simultria-api": "0.4.1",
     "com.deucarian.viewer-authentication": "0.5.1",
     "com.unity.nuget.newtonsoft-json": "3.2.2"
   }
