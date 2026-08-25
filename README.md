@@ -145,7 +145,7 @@ The package emits `initialize_viewer` with a typed payload:
   "metadata": {
     "source": "simultria-development-profile",
     "transport": "editor-local",
-    "remote_endpoint": "development-profile"
+    "remote_endpoint": "direct"
   }
 }
 ```
@@ -173,7 +173,7 @@ closed instead of forwarding its bearer.
 Play Mode auto-load waits for exactly one live Viewer Authentication target with
 an access token and exactly one initialized `CommandRoutePortBehaviour`. It then
 routes the JSON through `ICommandRoutePort.RouteMessageAsync` using transport
-`editor-local` and remote endpoint `development-profile`. It never invokes a
+`editor-local` and the direct-page response endpoint `direct`. It never invokes a
 Report, Activity, or template bootstrap directly and stores no active-viewer
 dropdown or target ID.
 

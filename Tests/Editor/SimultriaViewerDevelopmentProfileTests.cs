@@ -47,6 +47,29 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void ZeroVersionSelectsActiveVersionByOmittingExactPin()
+        {
+            profile.ModelVersionId = 0;
+
+            bool created =
+                profile.TryCreatePayload(12, out var payload, out string error);
+
+            Assert.That(created, Is.True, error);
+            Assert.That(payload.ModelVersionId, Is.Null);
+        }
+
+        [Test]
+        public void NegativeVersionIsRejectedInsteadOfSelectingActiveVersion()
+        {
+            profile.ModelVersionId = -1;
+
+            bool created = profile.TryCreatePayload(12, out _, out string error);
+
+            Assert.That(created, Is.False);
+            Assert.That(error, Does.Contain("zero for the active version"));
+        }
+
+        [Test]
         public void RejectsSecretLikeMetadataAtAnyDepth()
         {
             profile.MetadataJson = "{\"nested\":{\"access_token\":\"never\"}}";

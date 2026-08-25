@@ -39,6 +39,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                     cancellationToken.ThrowIfCancellationRequested();
                     app.Payload = payload;
                     app.Source = metadata.Source;
+                    app.RemoteEndpoint = metadata.RemoteEndpoint;
                     return Task.FromResult(CommandResult.Success());
                 });
             GameObject owner = new GameObject("Command route");
@@ -64,6 +65,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                     Assert.That(application.Payload.ProjectId, Is.EqualTo(8));
                     Assert.That(application.Source,
                         Is.EqualTo(SimultriaViewerInitializationCommand.DevelopmentSource));
+                    Assert.That(application.RemoteEndpoint, Is.EqualTo("direct"));
                 }
             }
             finally
@@ -137,6 +139,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         {
             public SimultriaViewerInitializationPayload Payload { get; set; }
             public string Source { get; set; }
+            public string RemoteEndpoint { get; set; }
         }
 
     }
