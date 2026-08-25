@@ -133,6 +133,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
                 ViewerAuthenticationSession candidate =
                     ViewerAuthenticationSession.CreateTransient();
+                ViewerAuthenticationEditorSessionHandoff.TryApply(
+                    SimultriaViewerEditorAuthenticationBinding.Create(
+                        configuration),
+                    candidate);
                 IDisposable candidateRegistration =
                     registerTarget(configuration, candidate);
                 if (candidateRegistration == null)
@@ -311,6 +315,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 RebindRememberedTokenOwner);
             ViewerAuthenticationTargetRegistry.RegistrationsChanged +=
                 OnRegistrationsChanged;
+            ViewerAuthenticationTargetRegistry.TargetsChanged +=
+                OnTargetsChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorApplication.projectChanged += OnProjectChanged;
             EditorApplication.update += OnEditorUpdate;
@@ -387,6 +393,50 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static void OnRegistrationsChanged()
         {
             RequestRefresh(invalidateEnvironmentResolution: false);
+        }
+
+        private static void OnTargetsChanged()
+        {
+            if (!ViewerAuthenticationTargetRegistry.TryGet(
+                    SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                    out ViewerAuthenticationTarget target))
+            {
+                return;
+            }
+
+            SimultriaViewerEditorAuthenticationConfiguration configuration =
+                ResolveConfiguration();
+            if (configuration == null ||
+                !TryValidateTarget(target, configuration))
+            {
+                return;
+            }
+
+            ViewerAuthenticationEditorSessionHandoff.Capture(
+                SimultriaViewerEditorAuthenticationBinding.Create(
+                    configuration),
+                target.Session);
+        }
+
+        private static bool TryValidateTarget(
+            ViewerAuthenticationTarget target,
+            SimultriaViewerEditorAuthenticationConfiguration configuration)
+        {
+            if (configuration.ConnectionProfile != null)
+            {
+                return SimultriaViewerConnectionAuthentication
+                    .TryValidateTarget(
+                        target,
+                        configuration.ConnectionProfile,
+                        configuration.EnvironmentId,
+                        out _);
+            }
+
+            return SimultriaViewerConnectionAuthentication.TryValidateTarget(
+                target,
+                configuration.ApiProfile,
+                configuration.EnvironmentId,
+                out _);
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
@@ -652,6 +702,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             ViewerAuthenticationTargetRegistry.RegistrationsChanged -=
                 OnRegistrationsChanged;
+            ViewerAuthenticationTargetRegistry.TargetsChanged -=
+                OnTargetsChanged;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.projectChanged -= OnProjectChanged;
             EditorApplication.update -= OnEditorUpdate;
