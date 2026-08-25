@@ -622,7 +622,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     profile == null ? null : profile.BuildProduct,
                     "environment_resolution_failed",
                     "Automatic environment resolution failed (" +
-                    exception.GetType().Name + ").");
+                    exception.GetType().Name + ").",
+                    SimultriaViewerRuntimeKind.Editor,
+                    Application.productName,
+                    editorOverrideActive: false);
             }
 
             if (shuttingDown || cancellationToken.IsCancellationRequested ||

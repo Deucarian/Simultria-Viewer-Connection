@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0] - 2026-08-25
+
+### Added
+
+- Resolve player-build environments from the public Simultria Unity build
+  directory using the compiled `Application.version` and canonical product.
+- Publish one immutable, sanitized runtime environment decision and gate
+  generic viewer startup until its matching connection provider is ready.
+- Keep project/user development profiles as Editor-only selection inputs while
+  player builds use a separate configuration with no target-environment or
+  build-version override.
+
+### Changed
+
+- Reject missing, unknown, mismatched, or unavailable build-directory results
+  without falling back to another version or environment.
+
 ## [0.4.5] - 2026-08-25
 
 ### Fixed

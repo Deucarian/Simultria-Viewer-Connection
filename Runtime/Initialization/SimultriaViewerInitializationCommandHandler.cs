@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.CommandRouting;
+using UnityEngine;
 
 namespace Deucarian.SimultriaViewerConnection
 {
@@ -44,6 +45,32 @@ namespace Deucarian.SimultriaViewerConnection
             {
                 return Task.FromResult(
                     CommandResult.Failure("invalid_payload", error));
+            }
+
+            if (SimultriaViewerRuntimeEnvironment.TryGetCurrent(
+                    out SimultriaViewerEnvironmentResolution resolution))
+            {
+                string authoritativeEnvironment =
+                    resolution.EnvironmentId.Value;
+                if (!string.IsNullOrWhiteSpace(payload.EnvironmentId) &&
+                    !string.Equals(
+                        payload.EnvironmentId.Trim(),
+                        authoritativeEnvironment,
+                        StringComparison.Ordinal))
+                {
+                    return Task.FromResult(CommandResult.Failure(
+                        "environment_mismatch",
+                        "The initialization environment does not match the " +
+                        "environment assigned to this Unity build."));
+                }
+
+                payload.EnvironmentId = authoritativeEnvironment;
+            }
+            else if (!Application.isEditor)
+            {
+                return Task.FromResult(CommandResult.Failure(
+                    "environment_unresolved",
+                    "The Unity build environment has not been resolved."));
             }
 
             return handler(

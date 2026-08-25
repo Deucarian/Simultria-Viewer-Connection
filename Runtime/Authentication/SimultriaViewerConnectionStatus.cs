@@ -1,6 +1,7 @@
 using Deucarian.API.Core;
 using Deucarian.ViewerAuthentication;
 
+#if UNITY_EDITOR
 namespace Deucarian.SimultriaViewerConnection
 {
     /// <summary>Sanitized aggregate status for editor and diagnostics presentation.</summary>
@@ -134,3 +135,4 @@ namespace Deucarian.SimultriaViewerConnection
         }
     }
 }
+#endif

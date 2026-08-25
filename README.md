@@ -24,7 +24,27 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 1.4.2,
-Simultria API 0.4.0, Command Routing 0.1.2, and Viewer Authentication 0.5.0.
+Simultria API 0.4.1, Command Routing 0.1.2, and Viewer Authentication 0.5.1.
+
+## Player build configuration
+
+Player builds use `SimultriaViewerBuildConfiguration`, not a development
+profile. This asset contains only the project-owned API connection, the API
+environment that hosts the public build directory, and the canonical backend
+product. It deliberately has no target-environment or build-version override.
+
+At startup the resolver sends the compiled `Application.version` and product
+to `GET /api/v2/unity/builds/versions/{version}/{product}`. It verifies that
+the returned version and product are exact, maps the returned environment, and
+publishes one immutable session decision. Unknown versions, backend fallback
+records, deprecated/unknown environments, transport failures, and unconfigured
+target environments stop startup before a session or authenticated API client
+is created.
+
+`SimultriaViewerBuildConnectionGate` can hold a generic viewer bootstrap
+disabled until that decision and its runtime connection provider are ready.
+Development profiles and their manual/version override fields compile only in
+the Unity Editor and should live in an `Editor` folder or Editor-only settings.
 
 ## Development profile
 
@@ -53,12 +73,13 @@ metadata keys are rejected recursively.
 
 ### Environment resolution
 
-Manual mode preserves the existing behavior: an empty environment ID means
+Editor Manual mode preserves the existing behavior: an empty environment ID means
 Development, while an explicitly authored custom ID remains intact and is
 accepted when the connection profile configures it.
 
-Automatic mode uses `Application.version` unless the profile supplies an
-explicit local/editor override. It calls the public Simultria route
+Editor Automatic mode uses `Application.version` unless the profile supplies an
+explicit local override. Player builds always use `Application.version` from
+the build configuration. Both call the public Simultria route
 `GET /api/v2/unity/builds/versions/{id}/{product}` through the profile's
 explicitly selected build-directory environment. The backend response is the
 only build-to-environment mapping. This package does not create a duplicate

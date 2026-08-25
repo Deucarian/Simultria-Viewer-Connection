@@ -2,6 +2,12 @@ using Deucarian.API.Models;
 
 namespace Deucarian.SimultriaViewerConnection
 {
+    public enum SimultriaViewerRuntimeKind
+    {
+        Editor = 0,
+        Build = 1
+    }
+
     /// <summary>How a viewer chooses its effective Simultria environment.</summary>
     public enum SimultriaViewerEnvironmentResolutionMode
     {
@@ -24,6 +30,13 @@ namespace Deucarian.SimultriaViewerConnection
         string BuildVersion { get; }
     }
 
+    public interface ISimultriaViewerRuntimeContext
+    {
+        bool IsEditor { get; }
+
+        string ApplicationName { get; }
+    }
+
     /// <summary>Sanitized outcome of effective-environment resolution.</summary>
     public sealed class SimultriaViewerEnvironmentResolution
     {
@@ -34,6 +47,9 @@ namespace Deucarian.SimultriaViewerConnection
             string buildVersion,
             string product,
             string source,
+            SimultriaViewerRuntimeKind runtimeKind,
+            string applicationName,
+            bool editorOverrideActive,
             string errorCode,
             string message)
         {
@@ -43,6 +59,9 @@ namespace Deucarian.SimultriaViewerConnection
             BuildVersion = buildVersion ?? string.Empty;
             Product = product ?? string.Empty;
             Source = source ?? string.Empty;
+            RuntimeKind = runtimeKind;
+            ApplicationName = applicationName ?? string.Empty;
+            EditorOverrideActive = editorOverrideActive;
             ErrorCode = errorCode ?? string.Empty;
             Message = message ?? string.Empty;
         }
@@ -59,6 +78,12 @@ namespace Deucarian.SimultriaViewerConnection
 
         public string Source { get; }
 
+        public SimultriaViewerRuntimeKind RuntimeKind { get; }
+
+        public string ApplicationName { get; }
+
+        public bool EditorOverrideActive { get; }
+
         public string ErrorCode { get; }
 
         public string Message { get; }
@@ -68,7 +93,10 @@ namespace Deucarian.SimultriaViewerConnection
             ApiEnvironmentId environmentId,
             string buildVersion,
             string product,
-            string source)
+            string source,
+            SimultriaViewerRuntimeKind runtimeKind,
+            string applicationName,
+            bool editorOverrideActive)
         {
             return new SimultriaViewerEnvironmentResolution(
                 true,
@@ -77,6 +105,9 @@ namespace Deucarian.SimultriaViewerConnection
                 buildVersion,
                 product,
                 source,
+                runtimeKind,
+                applicationName,
+                editorOverrideActive,
                 null,
                 null);
         }
@@ -86,7 +117,10 @@ namespace Deucarian.SimultriaViewerConnection
             string buildVersion,
             string product,
             string errorCode,
-            string message)
+            string message,
+            SimultriaViewerRuntimeKind runtimeKind,
+            string applicationName,
+            bool editorOverrideActive)
         {
             return new SimultriaViewerEnvironmentResolution(
                 false,
@@ -97,8 +131,26 @@ namespace Deucarian.SimultriaViewerConnection
                 mode == SimultriaViewerEnvironmentResolutionMode.Manual
                     ? "Manual profile selection"
                     : "Simultria Unity build directory",
+                runtimeKind,
+                applicationName,
+                editorOverrideActive,
                 errorCode,
                 message);
+        }
+
+        public string ToDiagnosticString()
+        {
+            return "application=" + ApplicationName +
+                   " build_version=" + BuildVersion +
+                   " product=" + Product +
+                   " environment=" +
+                   (Succeeded ? EnvironmentId.Value : "unresolved") +
+                   " runtime=" + RuntimeKind +
+                   " editor_override=" + EditorOverrideActive +
+                   " source=" + Source +
+                   (string.IsNullOrWhiteSpace(ErrorCode)
+                       ? string.Empty
+                       : " error_code=" + ErrorCode);
         }
     }
 }
