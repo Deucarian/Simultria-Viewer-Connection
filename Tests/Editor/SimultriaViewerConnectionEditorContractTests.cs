@@ -73,5 +73,21 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 Object.DestroyImmediate(profile);
             }
         }
+
+        [Test]
+        public void AuthenticationWaitRemainsRecognizableForInteractiveSignIn()
+        {
+            Assert.That(
+                SimultriaViewerDevelopmentCommandService
+                    .IsWaitingForAuthentication(
+                        SimultriaViewerDevelopmentCommandService
+                            .AuthenticationRequiredMessage),
+                Is.True);
+            Assert.That(
+                SimultriaViewerDevelopmentCommandService
+                    .IsWaitingForAuthentication(
+                        "Waiting for the running viewer."),
+                Is.False);
+        }
     }
 }

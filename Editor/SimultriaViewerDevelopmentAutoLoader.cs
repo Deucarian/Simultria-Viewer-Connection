@@ -132,7 +132,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (!string.IsNullOrWhiteSpace(pendingWarning))
             {
-                Log.Warning("Development context was not auto-loaded. " + pendingWarning);
+                Log.Error("Development context was not auto-loaded. " + pendingWarning);
                 Stop();
                 return;
             }
@@ -164,9 +164,18 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     Log.Info(waitReason);
                 }
 
-                if (EditorApplication.timeSinceStartup >= deadline)
+                if (SimultriaViewerDevelopmentCommandService
+                        .IsWaitingForAuthentication(waitReason))
                 {
-                    Log.Warning("Development context auto-load timed out. " + waitReason);
+                    // Authentication is an explicit user interaction and must not
+                    // expire while the sign-in window is open. Once authentication
+                    // succeeds, the normal component wait retains a full deadline.
+                    deadline = EditorApplication.timeSinceStartup +
+                               MaximumWaitSeconds;
+                }
+                else if (EditorApplication.timeSinceStartup >= deadline)
+                {
+                    Log.Error("Development context auto-load timed out. " + waitReason);
                     Stop();
                 }
 
@@ -189,7 +198,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                         out _,
                         out string profileError))
                 {
-                    Log.Warning(
+                    Log.Error(
                         "Development context was not auto-loaded. " +
                         profileError);
                     return;
@@ -208,7 +217,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 }
                 else
                 {
-                    Log.Warning(
+                    Log.Error(
                         "Simultria development initialization was rejected" +
                         (string.IsNullOrWhiteSpace(result?.ErrorCode)
                             ? "."

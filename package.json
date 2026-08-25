@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.simultria-viewer-connection",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "displayName": "Deucarian Simultria Viewer Connection",
   "description": "Optional Simultria environment, authentication, and development-context connection for Deucarian viewers.",
   "unity": "6000.0",

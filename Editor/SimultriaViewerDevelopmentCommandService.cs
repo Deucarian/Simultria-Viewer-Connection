@@ -14,6 +14,9 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 {
     internal static class SimultriaViewerDevelopmentCommandService
     {
+        internal const string AuthenticationRequiredMessage =
+            "Waiting for authentication. Open Tools/Deucarian/Viewer/Authentication.";
+
         public static bool TryCreateCommand(
             SimultriaViewerDevelopmentProfile profile,
             out CommandEnvelope command,
@@ -144,7 +147,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             if (authenticationTarget.Session?.Status.HasAccessToken != true)
             {
                 authenticationTarget = null;
-                error = "Waiting for authentication. Open Tools/Deucarian/Viewer/Authentication.";
+                error = AuthenticationRequiredMessage;
                 return false;
             }
 
@@ -159,6 +162,14 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             error = null;
             return true;
+        }
+
+        internal static bool IsWaitingForAuthentication(string error)
+        {
+            return string.Equals(
+                error,
+                AuthenticationRequiredMessage,
+                StringComparison.Ordinal);
         }
 
         public static bool TryResolveCommandRoute(

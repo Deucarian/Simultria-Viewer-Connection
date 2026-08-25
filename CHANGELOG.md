@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.3] - 2026-08-25
+
+### Fixed
+
+- Keep Play Mode development auto-load active while an interactive viewer sign-in
+  is in progress, then continue immediately after authentication succeeds.
+- Report missing or invalid automatic Play Mode configuration and initialization
+  failures as errors instead of leaving consumers with warning-only blank viewers.
+
 ## [0.4.2] - 2026-08-25
 
 ### Fixed
