@@ -1,7 +1,9 @@
 using System;
 using System.Threading;
+using Deucarian.API.Models;
 using Deucarian.CommandRouting;
 using Deucarian.Logging;
+using Deucarian.Simultria.API.Configuration;
 using Deucarian.ViewerAuthentication;
 using UnityEditor;
 
@@ -27,6 +29,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static bool dispatching;
         private static bool pendingAutomatic;
         private static bool resolvingAutomatic;
+        private static IDisposable runtimeProviderRegistration;
 
         static SimultriaViewerDevelopmentAutoLoader()
         {
@@ -44,6 +47,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             if (state == PlayModeStateChange.EnteredPlayMode)
             {
                 Restore();
+                RegisterRuntimeConnectionProvider();
                 deadline = EditorApplication.timeSinceStartup + MaximumWaitSeconds;
                 cancellation = new CancellationTokenSource();
                 dispatching = false;
@@ -56,6 +60,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             if (state == PlayModeStateChange.ExitingPlayMode)
             {
                 Stop();
+                ReleaseRuntimeConnectionProvider();
                 ClearPending();
             }
         }
@@ -285,6 +290,97 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             cancellation?.Cancel();
             cancellation?.Dispose();
             cancellation = null;
+        }
+
+        private static void RegisterRuntimeConnectionProvider()
+        {
+            ReleaseRuntimeConnectionProvider();
+            if (!SimultriaViewerConnectionProjectSettings.instance
+                    .AutoLoadInPlayMode ||
+                pendingAutomatic ||
+                !string.IsNullOrWhiteSpace(pendingWarning))
+            {
+                return;
+            }
+
+            if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
+                    out SimultriaViewerDevelopmentProfile profile,
+                    out _,
+                    out string profileError))
+            {
+                pendingWarning = profileError;
+                return;
+            }
+
+            if (!TryCreateRuntimeConnectionProvider(
+                    profile,
+                    profile.EnvironmentId,
+                    out IViewerRuntimeConnectionProvider provider,
+                    out string error))
+            {
+                pendingWarning = error;
+                return;
+            }
+
+            try
+            {
+                runtimeProviderRegistration =
+                    ViewerRuntimeConnectionProviderRegistry.Register(provider);
+            }
+            catch (Exception exception)
+            {
+                pendingWarning =
+                    "The selected development runtime connection could not " +
+                    "be registered (" + exception.GetType().Name + ").";
+            }
+        }
+
+        internal static bool TryCreateRuntimeConnectionProvider(
+            SimultriaViewerDevelopmentProfile profile,
+            ApiEnvironmentId effectiveEnvironmentId,
+            out IViewerRuntimeConnectionProvider provider,
+            out string error)
+        {
+            provider = null;
+            if (profile == null)
+            {
+                error = "A Simultria viewer development profile is required.";
+                return false;
+            }
+
+            if (effectiveEnvironmentId.IsEmpty)
+            {
+                error = "A resolved Simultria environment is required.";
+                return false;
+            }
+
+            if (profile.ConnectionProfileReference != null)
+            {
+                provider = new SimultriaViewerRuntimeConnectionProvider(
+                    profile.ConnectionProfileReference,
+                    effectiveEnvironmentId);
+                error = string.Empty;
+                return true;
+            }
+
+            SimultriaApiProfile legacyProfile = profile.EffectiveApiProfile;
+            if (legacyProfile == null)
+            {
+                error = "The development profile has no API connection.";
+                return false;
+            }
+
+            provider = new SimultriaViewerRuntimeConnectionProvider(
+                legacyProfile,
+                effectiveEnvironmentId);
+            error = string.Empty;
+            return true;
+        }
+
+        private static void ReleaseRuntimeConnectionProvider()
+        {
+            runtimeProviderRegistration?.Dispose();
+            runtimeProviderRegistration = null;
         }
 
         private static void ClearPending()

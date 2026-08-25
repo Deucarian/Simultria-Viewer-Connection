@@ -177,6 +177,12 @@ routes the JSON through `ICommandRoutePort.RouteMessageAsync` using transport
 Report, Activity, or template bootstrap directly and stores no active-viewer
 dropdown or target ID.
 
+For a selected manual development profile, the editor also registers that
+profile's generic runtime connection before the viewer scene starts. Generic
+viewer templates therefore lease the same stable authentication target, API
+client, environment, and trusted model origin that the auto-loader uses to
+resolve and dispatch `initialize_viewer`.
+
 Auto-load is opt-in for a newly imported package. Neutral templates and Activity
 Viewer therefore do not warn on every Play when no development profile is
 selected. Report Viewer can keep its explicit committed project setting enabled.

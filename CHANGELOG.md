@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2] - 2026-08-25
+
+### Fixed
+
+- Register the selected manual development profile as the generic viewer's
+  runtime connection before scene startup, so Play Mode auto-load uses the
+  same authenticated API session for model resolution and download.
+
 ## [0.4.1] - 2026-08-24
 
 ### Added
