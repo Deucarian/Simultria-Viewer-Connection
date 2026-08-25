@@ -210,6 +210,9 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                     connection.AuthenticatedOrigins,
                     Does.Contain(baseUri.GetLeftPart(UriPartial.Authority)));
                 Assert.That(
+                    connection.AuthenticatedOrigins,
+                    Does.Contain("https://simultria-model.invalid"));
+                Assert.That(
                     ViewerAuthenticationTargetRegistry.TryGet(
                         connection.TargetId,
                         out ViewerAuthenticationTarget target),
@@ -258,6 +261,38 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             {
                 connection?.Dispose();
                 UnityEngine.Object.DestroyImmediate(connectionProfile);
+            }
+        }
+
+        [Test]
+        public void RuntimeProviderUsesRetainedEditorSession()
+        {
+            ViewerAuthenticationSession session =
+                ViewerAuthenticationSession.CreateTransient();
+            session.ReplaceAccessTokenAsync("editor-session-token")
+                .GetAwaiter()
+                .GetResult();
+            var provider = new SimultriaViewerRuntimeConnectionProvider(
+                configuredLegacyProfile,
+                SimultriaEnvironmentIds.Development,
+                session);
+            ViewerRuntimeConnection connection = null;
+            try
+            {
+                Assert.That(
+                    provider.TryCreate(out connection, out string error),
+                    Is.True,
+                    error);
+                Assert.That(
+                    connection.Session.AccessToken,
+                    Is.EqualTo("editor-session-token"));
+                Assert.That(
+                    connection.Session.Status.HasAccessToken,
+                    Is.True);
+            }
+            finally
+            {
+                connection?.Dispose();
             }
         }
 
@@ -728,6 +763,14 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                         out ApiNamedClientDefinition client),
                     Is.True);
                 client.BaseUrl = "https://simultria-viewer.invalid";
+                configuredDevelopmentEnvironment.Clients.Add(
+                    new ApiNamedClientDefinition
+                    {
+                        ClientId =
+                            SimultriaViewerAuthenticatedOriginResolver
+                                .ModelContentClientIdValue,
+                        BaseUrl = "https://simultria-model.invalid"
+                    });
                 environments.Add(configuredDevelopmentEnvironment);
             }
 

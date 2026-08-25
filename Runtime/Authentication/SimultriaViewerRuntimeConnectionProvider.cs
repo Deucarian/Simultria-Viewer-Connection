@@ -22,6 +22,7 @@ namespace Deucarian.SimultriaViewerConnection
         private readonly ApiConnectionProfile connectionProfile;
         private readonly SimultriaApiProfile legacyApiProfile;
         private readonly ApiEnvironmentId environmentId;
+        private ViewerAuthenticationSession initialSession;
         private bool leased;
 
         /// <summary>
@@ -31,9 +32,18 @@ namespace Deucarian.SimultriaViewerConnection
         public SimultriaViewerRuntimeConnectionProvider(
             ApiConnectionProfile profile,
             ApiEnvironmentId environment)
+            : this(profile, environment, null)
+        {
+        }
+
+        internal SimultriaViewerRuntimeConnectionProvider(
+            ApiConnectionProfile profile,
+            ApiEnvironmentId environment,
+            ViewerAuthenticationSession session)
         {
             connectionProfile = profile;
             environmentId = environment;
+            initialSession = session;
         }
 
         /// <summary>
@@ -43,9 +53,18 @@ namespace Deucarian.SimultriaViewerConnection
         public SimultriaViewerRuntimeConnectionProvider(
             SimultriaApiProfile profile,
             ApiEnvironmentId environment)
+            : this(profile, environment, null)
+        {
+        }
+
+        internal SimultriaViewerRuntimeConnectionProvider(
+            SimultriaApiProfile profile,
+            ApiEnvironmentId environment,
+            ViewerAuthenticationSession session)
         {
             legacyApiProfile = profile;
             environmentId = environment;
+            initialSession = session;
         }
 
         public string Id => ProviderId;
@@ -68,7 +87,8 @@ namespace Deucarian.SimultriaViewerConnection
                 leased = true;
             }
 
-            ViewerAuthenticationSession session = null;
+            ViewerAuthenticationSession session = initialSession;
+            initialSession = null;
             IDisposable targetRegistration = null;
             SimultriaViewerRuntimeConnectionLifetime lifetime = null;
             try
@@ -82,11 +102,17 @@ namespace Deucarian.SimultriaViewerConnection
                         out ApiResolvedClient resolvedClient,
                         out error))
                 {
+                    if (session != null)
+                    {
+                        _ = session.ClearAsync(CancellationToken.None);
+                    }
+
                     ReleaseLease();
                     return false;
                 }
 
-                session = ViewerAuthenticationSession.CreateTransient();
+                session = session ?? ViewerAuthenticationSession.CreateTransient();
+
                 IApiClient apiClient =
                     SimultriaViewerConnectionAuthentication
                         .CreateSessionApiClient(
@@ -114,7 +140,9 @@ namespace Deucarian.SimultriaViewerConnection
                     lifetime.Session,
                     apiClient,
                     resolvedClient.BaseUrl,
-                    null,
+                    SimultriaViewerAuthenticatedOriginResolver.Resolve(
+                        composition,
+                        environmentId),
                     lifetime);
                 error = null;
                 return true;
