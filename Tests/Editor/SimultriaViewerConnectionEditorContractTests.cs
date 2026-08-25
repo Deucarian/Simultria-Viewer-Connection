@@ -1,5 +1,9 @@
 using NUnit.Framework;
+using Deucarian.API.Configuration;
+using Deucarian.API.Models;
 using Deucarian.SimultriaViewerConnection.Editor;
+using Deucarian.ViewerAuthentication;
+using UnityEngine;
 
 namespace Deucarian.SimultriaViewerConnection.Tests
 {
@@ -34,6 +38,40 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             Assert.That(
                 SimultriaViewerWebGlDevelopmentExporter.ExportAssetPath,
                 Does.Not.Contain("token"));
+        }
+
+        [Test]
+        public void PlayModeAutoLoadCreatesTheSharedRuntimeProvider()
+        {
+            SimultriaViewerDevelopmentProfile profile =
+                ScriptableObject.CreateInstance<
+                    SimultriaViewerDevelopmentProfile>();
+            ApiConnectionProfile connection =
+                ScriptableObject.CreateInstance<ApiConnectionProfile>();
+            try
+            {
+                profile.ConnectionProfileReference = connection;
+                var environment = new ApiEnvironmentId(
+                    "simultria.development");
+
+                Assert.That(
+                    SimultriaViewerDevelopmentAutoLoader
+                        .TryCreateRuntimeConnectionProvider(
+                            profile,
+                            environment,
+                            out IViewerRuntimeConnectionProvider provider,
+                            out string error),
+                    Is.True,
+                    error);
+                Assert.That(
+                    provider,
+                    Is.TypeOf<SimultriaViewerRuntimeConnectionProvider>());
+            }
+            finally
+            {
+                Object.DestroyImmediate(connection);
+                Object.DestroyImmediate(profile);
+            }
         }
     }
 }
