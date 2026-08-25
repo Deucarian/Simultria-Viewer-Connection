@@ -4,8 +4,6 @@ using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
-using Deucarian.Simultria.API.Models;
-using Deucarian.Simultria.API.Services;
 using Deucarian.ViewerAuthentication;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -330,16 +328,12 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             IApiClient apiClient = ApiClientFactory.Create(
                 null,
                 authenticationTarget.Session.ApiAuthProvider);
-            var resolver = new SimultriaViewerModelResolver(
+            var resolver = new SimultriaViewerModelInitializationResolver(
                 apiClient,
                 composition,
                 effectiveEnvironmentId);
-            SimultriaViewerModelResolveResult resolved =
-                await resolver.ResolveAsync(
-                    payload.ProjectId,
-                    payload.ModelId,
-                    payload.ModelVersionId,
-                    cancellationToken);
+            SimultriaViewerModelInitializationResolution resolved =
+                await resolver.ResolveAsync(payload, cancellationToken);
             if (resolved == null || !resolved.Succeeded)
             {
                 return LiveCommandPreparation.Failure(
@@ -351,7 +345,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             return TryEnrichLiveCommand(
                 command,
                 payload,
-                resolved.DownloadUrl,
+                resolved.ModelUrl,
                 resolved.ModelVersionId,
                 out CommandEnvelope enriched,
                 out string enrichmentError)

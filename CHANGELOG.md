@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1] - 2026-08-25
+
+### Added
+
+- Added one runtime model-initialization resolver that turns canonical
+  `project_id`, `model_id`, and optional `model_version_id` values into the
+  authenticated Simultria model source used by every viewer product.
+
+### Security
+
+- Always resolve the model source through the assigned Simultria environment;
+  host-provided `model_url` values are ignored and credential-bearing resolved
+  URLs fail closed.
+
 ## [0.5.0] - 2026-08-25
 
 ### Added
