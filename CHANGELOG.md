@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.4] - 2026-08-25
+
+### Fixed
+
+- Retain the authenticated Simultria session for the lifetime of the current
+  Unity Editor process and carry it across Edit Mode and Play Mode without
+  writing the access token to project or user settings.
+- Bind retained Editor authentication to the exact API profile and environment
+  so a token is never reused after switching backends.
+- Include the explicitly configured `simultria.model-content` client origin in
+  runtime connections so authenticated cross-origin model downloads can load
+  without allowing arbitrary hosts.
+
 ## [0.4.3] - 2026-08-25
 
 ### Fixed

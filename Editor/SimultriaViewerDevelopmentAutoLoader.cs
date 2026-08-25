@@ -5,6 +5,7 @@ using Deucarian.CommandRouting;
 using Deucarian.Logging;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.ViewerAuthentication;
+using Deucarian.ViewerAuthentication.Editor;
 using UnityEditor;
 
 namespace Deucarian.SimultriaViewerConnection.Editor
@@ -365,9 +366,15 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (profile.ConnectionProfileReference != null)
             {
+                ViewerAuthenticationEditorSessionHandoff.TryCreateSession(
+                    SimultriaViewerEditorAuthenticationBinding.Create(
+                        profile.ConnectionProfileReference,
+                        effectiveEnvironmentId),
+                    out ViewerAuthenticationSession session);
                 provider = new SimultriaViewerRuntimeConnectionProvider(
                     profile.ConnectionProfileReference,
-                    effectiveEnvironmentId);
+                    effectiveEnvironmentId,
+                    session);
                 error = string.Empty;
                 return true;
             }
@@ -379,9 +386,15 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return false;
             }
 
+            ViewerAuthenticationEditorSessionHandoff.TryCreateSession(
+                SimultriaViewerEditorAuthenticationBinding.Create(
+                    legacyProfile,
+                    effectiveEnvironmentId),
+                out ViewerAuthenticationSession legacySession);
             provider = new SimultriaViewerRuntimeConnectionProvider(
                 legacyProfile,
-                effectiveEnvironmentId);
+                effectiveEnvironmentId,
+                legacySession);
             error = string.Empty;
             return true;
         }
