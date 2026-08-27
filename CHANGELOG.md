@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1] - 2026-08-27
+
+### Changed
+
+- Reduced Simultria Viewer Development to one readiness summary, the active
+  development context, environment selection, auto-load, and an asset shortcut.
+- Moved detailed connection diagnostics and the optional credential-free local
+  WebGL export behind a collapsed Advanced section.
+- Removed duplicate authentication, API connection, command dispatch, and
+  command preview controls from the development-context window.
+
 ## [1.0.0] - 2026-08-26
 
 ### Breaking
