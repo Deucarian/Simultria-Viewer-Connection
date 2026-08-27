@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// One immutable, sanitized environment decision for the current viewer

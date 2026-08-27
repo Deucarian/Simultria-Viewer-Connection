@@ -1,24 +1,25 @@
 using System;
 using System.Threading;
+using Deucarian.API.Configuration;
 using Deucarian.API.Models;
 using Deucarian.CommandRouting;
 using Deucarian.Logging;
 using Deucarian.Simultria.API.Configuration;
-using Deucarian.ViewerAuthentication;
-using Deucarian.ViewerAuthentication.Editor;
+using Deucarian.Authentication;
+using Deucarian.Authentication.Editor;
 using UnityEditor;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     [InitializeOnLoad]
     internal static class SimultriaViewerDevelopmentAutoLoader
     {
         private const string PendingCommandKey =
-            "Deucarian.SimultriaViewerConnection.PendingCommand";
+            "Deucarian.SimultriaViewerIntegration.PendingCommand";
         private const string PendingWarningKey =
-            "Deucarian.SimultriaViewerConnection.PendingWarning";
+            "Deucarian.SimultriaViewerIntegration.PendingWarning";
         private const string PendingAutomaticKey =
-            "Deucarian.SimultriaViewerConnection.PendingAutomatic";
+            "Deucarian.SimultriaViewerIntegration.PendingAutomatic";
         private const double MaximumWaitSeconds = 120d;
 
         private static readonly DLog Log = DLog.For("SimultriaViewerConnection.Development");
@@ -74,8 +75,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return;
             }
 
-            if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                    out SimultriaViewerDevelopmentProfile profile,
+            if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
+                    out SimultriaViewerDevelopmentContext profile,
                     out _,
                     out pendingWarning))
             {
@@ -156,7 +157,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
             if (!SimultriaViewerDevelopmentCommandService.TryResolveLivePort(
                     out CommandRoutePortBehaviour port,
-                    out ViewerAuthenticationTarget authenticationTarget,
+                    out AuthenticationTarget authenticationTarget,
                     out string waitReason))
             {
                 if (!string.Equals(lastWaitReason, waitReason, StringComparison.Ordinal))
@@ -190,12 +191,12 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private static async void DispatchAsync(
             CommandRoutePortBehaviour port,
-            ViewerAuthenticationTarget authenticationTarget)
+            AuthenticationTarget authenticationTarget)
         {
             try
             {
-                if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                        out SimultriaViewerDevelopmentProfile profile,
+                if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
+                        out SimultriaViewerDevelopmentContext profile,
                         out _,
                         out string profileError))
                 {
@@ -248,8 +249,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             resolvingAutomatic = true;
             try
             {
-                if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                        out SimultriaViewerDevelopmentProfile profile,
+                if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
+                        out SimultriaViewerDevelopmentContext profile,
                         out _,
                         out string profileError))
                 {
@@ -323,8 +324,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return;
             }
 
-            if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                    out SimultriaViewerDevelopmentProfile profile,
+            if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
+                    out SimultriaViewerDevelopmentContext profile,
                     out _,
                     out string profileError))
             {
@@ -356,7 +357,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         internal static bool TryCreateRuntimeConnectionProvider(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             ApiEnvironmentId effectiveEnvironmentId,
             out IViewerRuntimeConnectionProvider provider,
             out string error)
@@ -364,7 +365,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             provider = null;
             if (profile == null)
             {
-                error = "A Simultria viewer development profile is required.";
+                error = "A Simultria viewer development context is required.";
                 return false;
             }
 
@@ -374,37 +375,23 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return false;
             }
 
-            if (profile.ConnectionProfileReference != null)
+            ApiConnectionSettings settings =
+                profile.ConnectionSettingsReference;
+            if (settings == null)
             {
-                ViewerAuthenticationEditorSessionHandoff.TryCreateSession(
-                    SimultriaViewerEditorAuthenticationBinding.Create(
-                        profile.ConnectionProfileReference,
-                        effectiveEnvironmentId),
-                    out ViewerAuthenticationSession session);
-                provider = new SimultriaViewerRuntimeConnectionProvider(
-                    profile.ConnectionProfileReference,
-                    effectiveEnvironmentId,
-                    session);
-                error = string.Empty;
-                return true;
-            }
-
-            SimultriaApiProfile legacyProfile = profile.EffectiveApiProfile;
-            if (legacyProfile == null)
-            {
-                error = "The development profile has no API connection.";
+                error = "The development context has no API connection settings.";
                 return false;
             }
 
-            ViewerAuthenticationEditorSessionHandoff.TryCreateSession(
+            AuthenticationEditorSessionHandoff.TryCreateSession(
                 SimultriaViewerEditorAuthenticationBinding.Create(
-                    legacyProfile,
+                    settings,
                     effectiveEnvironmentId),
-                out ViewerAuthenticationSession legacySession);
+                out AuthenticationSession session);
             provider = new SimultriaViewerRuntimeConnectionProvider(
-                legacyProfile,
+                settings,
                 effectiveEnvironmentId,
-                legacySession);
+                session);
             error = string.Empty;
             return true;
         }

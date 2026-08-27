@@ -2,11 +2,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.CommandRouting;
-using Deucarian.SimultriaViewerConnection.Editor;
+using Deucarian.SimultriaViewerIntegration.Editor;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
     public sealed class SimultriaViewerInitializationCommandTests
     {

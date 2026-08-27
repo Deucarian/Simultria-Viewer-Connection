@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     [FilePath(
         SettingsPath,
@@ -31,7 +31,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
         }
 
-        public SimultriaViewerDevelopmentProfile LocalProfile
+        public SimultriaViewerDevelopmentContext LocalProfile
         {
             get => SimultriaViewerConnectionProjectSettings.LoadProfile(
                 localProfileGuid);

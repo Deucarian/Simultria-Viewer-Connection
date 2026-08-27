@@ -3,7 +3,7 @@ using Deucarian.CommandRouting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>Creates the canonical Command Routing initialization envelope.</summary>
     public static class SimultriaViewerInitializationCommand

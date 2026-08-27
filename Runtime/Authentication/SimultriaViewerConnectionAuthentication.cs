@@ -6,23 +6,23 @@ using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Authentication;
 using Deucarian.Simultria.API.Configuration;
-using Deucarian.ViewerAuthentication;
+using Deucarian.Authentication;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Composes one environment-specific Simultria provider into the generic
-    /// Viewer Authentication registry without duplicating token/session logic.
+    /// Authentication registry without duplicating token/session logic.
     /// </summary>
     public static class SimultriaViewerConnectionAuthentication
     {
         private static readonly object BindingGate = new object();
         private static readonly Dictionary<
-            SimultriaViewerAuthenticationProvider,
+            SimultriaAuthenticationProvider,
             AuthenticationBinding> Bindings =
             new Dictionary<
-                SimultriaViewerAuthenticationProvider,
+                SimultriaAuthenticationProvider,
                 AuthenticationBinding>();
 
         /// <summary>
@@ -39,14 +39,14 @@ namespace Deucarian.SimultriaViewerConnection
         /// stable target identity.
         /// </summary>
         public static bool TryRegister(
-            SimultriaViewerDevelopmentProfile developmentProfile,
-            IViewerAuthenticationSession session,
+            SimultriaViewerDevelopmentContext developmentContext,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient = null)
         {
-            if (developmentProfile?.EnvironmentResolutionMode ==
+            if (developmentContext?.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode
                     .AutomaticFromUnityBuildVersion)
             {
@@ -58,10 +58,10 @@ namespace Deucarian.SimultriaViewerConnection
             }
 
             return TryRegister(
-                developmentProfile,
-                developmentProfile == null
+                developmentContext,
+                developmentContext == null
                     ? default(ApiEnvironmentId)
-                    : developmentProfile.EnvironmentId,
+                    : developmentContext.EnvironmentId,
                 DefaultTargetId,
                 DefaultDisplayName,
                 session,
@@ -72,16 +72,16 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         public static bool TryRegister(
-            SimultriaViewerDevelopmentProfile developmentProfile,
+            SimultriaViewerDevelopmentContext developmentContext,
             ApiEnvironmentId effectiveEnvironmentId,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient = null)
         {
             return TryRegister(
-                developmentProfile,
+                developmentContext,
                 effectiveEnvironmentId,
                 DefaultTargetId,
                 DefaultDisplayName,
@@ -93,16 +93,16 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         public static bool TryRegister(
-            SimultriaViewerDevelopmentProfile developmentProfile,
+            SimultriaViewerDevelopmentContext developmentContext,
             string targetId,
             string displayName,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient = null)
         {
-            if (developmentProfile?.EnvironmentResolutionMode ==
+            if (developmentContext?.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode
                     .AutomaticFromUnityBuildVersion)
             {
@@ -114,10 +114,10 @@ namespace Deucarian.SimultriaViewerConnection
             }
 
             return TryRegister(
-                developmentProfile,
-                developmentProfile == null
+                developmentContext,
+                developmentContext == null
                     ? default(ApiEnvironmentId)
-                    : developmentProfile.EnvironmentId,
+                    : developmentContext.EnvironmentId,
                 targetId,
                 displayName,
                 session,
@@ -128,44 +128,28 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         private static bool TryRegister(
-            SimultriaViewerDevelopmentProfile developmentProfile,
+            SimultriaViewerDevelopmentContext developmentContext,
             ApiEnvironmentId effectiveEnvironmentId,
             string targetId,
             string displayName,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient)
         {
             registration = null;
-            if (developmentProfile == null)
+            if (developmentContext == null)
             {
                 environmentStatus = null;
-                error = "A Simultria viewer development profile is required.";
+                error = "A Simultria viewer development context is required.";
                 return false;
             }
 
-            ApiConnectionProfile connectionProfile =
-                developmentProfile.ConnectionProfileReference;
-            if (connectionProfile != null)
-            {
-                return TryRegister(
-                    connectionProfile,
-                    effectiveEnvironmentId,
-                    targetId,
-                    displayName,
-                    session,
-                    out registration,
-                    out environmentStatus,
-                    out error,
-                    apiClient);
-            }
-
-            SimultriaApiProfile legacyProfile =
-                developmentProfile.EffectiveApiProfile;
+            ApiConnectionSettings connectionSettings =
+                developmentContext.ConnectionSettingsReference;
             return TryRegister(
-                legacyProfile,
+                connectionSettings,
                 effectiveEnvironmentId,
                 targetId,
                 displayName,
@@ -179,19 +163,19 @@ namespace Deucarian.SimultriaViewerConnection
 
         /// <summary>
         /// Registers a single-viewer runtime session from a project-owned
-        /// generic API connection profile and environment.
+        /// generic API connection settings and environment.
         /// </summary>
         public static bool TryRegister(
-            ApiConnectionProfile connectionProfile,
+            ApiConnectionSettings connectionSettings,
             ApiEnvironmentId environmentId,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient = null)
         {
             return TryRegister(
-                connectionProfile,
+                connectionSettings,
                 environmentId,
                 DefaultTargetId,
                 DefaultDisplayName,
@@ -204,30 +188,30 @@ namespace Deucarian.SimultriaViewerConnection
 
         /// <summary>
         /// Registers a runtime session from a Simultria-compatible generic
-        /// API connection profile. The adapter validates the catalog and all
+        /// API connection settings. The adapter validates the catalog and all
         /// standard environment slots before a target can be registered.
         /// </summary>
         public static bool TryRegister(
-            ApiConnectionProfile connectionProfile,
+            ApiConnectionSettings connectionSettings,
             ApiEnvironmentId environmentId,
             string targetId,
             string displayName,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
             out string error,
             IApiClient apiClient = null)
         {
             registration = null;
-            if (connectionProfile == null)
+            if (connectionSettings == null)
             {
                 environmentStatus = null;
-                error = "Assign a Simultria API connection profile.";
+                error = "Assign Simultria API connection settings.";
                 return false;
             }
 
-            if (!SimultriaApiConnectionProfileAdapter.TryCreateComposition(
-                    connectionProfile,
+            if (!SimultriaApiConnectionSettingsAdapter.TryCreateComposition(
+                    connectionSettings,
                     out ApiComposition composition,
                     out error))
             {
@@ -236,100 +220,18 @@ namespace Deucarian.SimultriaViewerConnection
             }
 
             return TryRegisterResolvedProfile(
-                connectionProfile,
+                connectionSettings,
                 composition,
                 environmentId,
                 targetId,
                 displayName,
                 session,
                 (IApiClient effectiveClient,
-                    out SimultriaViewerAuthenticationProvider provider,
+                    out SimultriaAuthenticationProvider provider,
                     out ApiEnvironmentStatus status,
                     out string message) =>
-                    SimultriaViewerAuthenticationProviderFactory.TryCreate(
-                        connectionProfile,
-                        environmentId,
-                        effectiveClient,
-                        out provider,
-                        out status,
-                        out message),
-                out registration,
-                out environmentStatus,
-                out error,
-                apiClient);
-        }
-
-        /// <summary>
-        /// Registers a single-viewer runtime session from an explicit
-        /// Simultria API profile and environment, without requiring a
-        /// development project/model profile.
-        /// </summary>
-        public static bool TryRegister(
-            SimultriaApiProfile apiProfile,
-            ApiEnvironmentId environmentId,
-            IViewerAuthenticationSession session,
-            out IDisposable registration,
-            out ApiEnvironmentStatus environmentStatus,
-            out string error,
-            IApiClient apiClient = null)
-        {
-            return TryRegister(
-                apiProfile,
-                environmentId,
-                DefaultTargetId,
-                DefaultDisplayName,
-                session,
-                out registration,
-                out environmentStatus,
-                out error,
-                apiClient);
-        }
-
-        /// <summary>
-        /// Registers a runtime session from explicit environment composition.
-        /// Use the overload without target strings for the ordinary one-viewer
-        /// case so Edit Mode and Play Mode share remembered-token ownership.
-        /// </summary>
-        public static bool TryRegister(
-            SimultriaApiProfile apiProfile,
-            ApiEnvironmentId environmentId,
-            string targetId,
-            string displayName,
-            IViewerAuthenticationSession session,
-            out IDisposable registration,
-            out ApiEnvironmentStatus environmentStatus,
-            out string error,
-            IApiClient apiClient = null)
-        {
-            registration = null;
-            if (apiProfile == null)
-            {
-                environmentStatus = null;
-                error = "The package-provided Simultria API profile is missing.";
-                return false;
-            }
-
-            if (!apiProfile.TryCreateComposition(
-                    out ApiComposition composition,
-                    out error))
-            {
-                environmentStatus = null;
-                return false;
-            }
-
-            return TryRegisterResolvedProfile(
-                apiProfile,
-                composition,
-                environmentId,
-                targetId,
-                displayName,
-                session,
-                (IApiClient effectiveClient,
-                    out SimultriaViewerAuthenticationProvider provider,
-                    out ApiEnvironmentStatus status,
-                    out string message) =>
-                    SimultriaViewerAuthenticationProviderFactory.TryCreate(
-                        apiProfile,
+                    SimultriaAuthenticationProviderFactory.TryCreate(
+                        connectionSettings,
                         environmentId,
                         effectiveClient,
                         out provider,
@@ -347,7 +249,7 @@ namespace Deucarian.SimultriaViewerConnection
             ApiEnvironmentId environmentId,
             string targetId,
             string displayName,
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             TryCreateAuthenticationProvider createProvider,
             out IDisposable registration,
             out ApiEnvironmentStatus environmentStatus,
@@ -380,7 +282,7 @@ namespace Deucarian.SimultriaViewerConnection
                     CreateSessionApiClient(session, apiBaseUrl);
                 if (!createProvider(
                         effectiveClient,
-                        out SimultriaViewerAuthenticationProvider provider,
+                        out SimultriaAuthenticationProvider provider,
                         out environmentStatus,
                         out error))
                 {
@@ -411,12 +313,12 @@ namespace Deucarian.SimultriaViewerConnection
 
         private delegate bool TryCreateAuthenticationProvider(
             IApiClient apiClient,
-            out SimultriaViewerAuthenticationProvider provider,
+            out SimultriaAuthenticationProvider provider,
             out ApiEnvironmentStatus environmentStatus,
             out string error);
 
         internal static IApiClient CreateSessionApiClient(
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             string apiBaseUrl = null,
             Func<ApiClientConfig, IApiAuthProvider, IApiClient> clientFactory =
                 null)
@@ -440,37 +342,14 @@ namespace Deucarian.SimultriaViewerConnection
 
 #if UNITY_EDITOR
         internal static bool TryValidateTarget(
-            ViewerAuthenticationTarget target,
-            SimultriaApiProfile expectedProfile,
+            AuthenticationTarget target,
+            ApiConnectionSettings expectedProfile,
             ApiEnvironmentId expectedEnvironmentId,
             out string error)
         {
             ApiComposition expectedComposition = null;
             if (expectedProfile != null &&
-                !expectedProfile.TryCreateComposition(
-                    out expectedComposition,
-                    out error))
-            {
-                return false;
-            }
-
-            return TryValidateTarget(
-                target,
-                expectedProfile,
-                expectedComposition,
-                expectedEnvironmentId,
-                out error);
-        }
-
-        internal static bool TryValidateTarget(
-            ViewerAuthenticationTarget target,
-            ApiConnectionProfile expectedProfile,
-            ApiEnvironmentId expectedEnvironmentId,
-            out string error)
-        {
-            ApiComposition expectedComposition = null;
-            if (expectedProfile != null &&
-                !SimultriaApiConnectionProfileAdapter.TryCreateComposition(
+                !SimultriaApiConnectionSettingsAdapter.TryCreateComposition(
                     expectedProfile,
                     out expectedComposition,
                     out error))
@@ -487,30 +366,21 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         internal static bool TryValidateTarget(
-            ViewerAuthenticationTarget target,
-            SimultriaViewerDevelopmentProfile expectedProfile,
+            AuthenticationTarget target,
+            SimultriaViewerDevelopmentContext expectedProfile,
             ApiEnvironmentId expectedEnvironmentId,
             out string error)
         {
-            if (expectedProfile?.ConnectionProfileReference != null)
-            {
-                return TryValidateTarget(
-                    target,
-                    expectedProfile.ConnectionProfileReference,
-                    expectedEnvironmentId,
-                    out error);
-            }
-
             return TryValidateTarget(
                 target,
-                expectedProfile?.EffectiveApiProfile,
+                expectedProfile?.ConnectionSettingsReference,
                 expectedEnvironmentId,
                 out error);
         }
 #endif
 
         private static bool TryValidateTarget(
-            ViewerAuthenticationTarget target,
+            AuthenticationTarget target,
             ScriptableObject expectedProfile,
             ApiComposition expectedComposition,
             ApiEnvironmentId expectedEnvironmentId,
@@ -528,9 +398,9 @@ namespace Deucarian.SimultriaViewerConnection
             }
 
             if (!(target.AcquisitionProvider is
-                    SimultriaViewerAuthenticationProvider provider) ||
+                    SimultriaAuthenticationProvider provider) ||
                 !(target.ValidationProvider is
-                    SimultriaViewerAuthenticationProvider validator) ||
+                    SimultriaAuthenticationProvider validator) ||
                 !ReferenceEquals(provider, validator))
             {
                 error =
@@ -568,7 +438,7 @@ namespace Deucarian.SimultriaViewerConnection
                     expectedEnvironmentId))
             {
                 error =
-                    "The registered Simultria authentication environment does not match the selected development profile.";
+                    "The registered Simultria authentication environment does not match the selected development context.";
                 return false;
             }
 
@@ -577,7 +447,7 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         private static bool TryMatchCurrentComposition(
-            SimultriaViewerAuthenticationProvider provider,
+            SimultriaAuthenticationProvider provider,
             ApiComposition expectedComposition,
             ApiEnvironmentId expectedEnvironmentId)
         {
@@ -629,8 +499,8 @@ namespace Deucarian.SimultriaViewerConnection
         private static IDisposable RegisterBoundTarget(
             string targetId,
             string displayName,
-            IViewerAuthenticationSession session,
-            SimultriaViewerAuthenticationProvider provider,
+            IAuthenticationSession session,
+            SimultriaAuthenticationProvider provider,
             ScriptableObject profile,
             ApiEnvironmentId environmentId)
         {
@@ -645,13 +515,29 @@ namespace Deucarian.SimultriaViewerConnection
 
             try
             {
+                if (!provider.Composition.TryResolveClient(
+                        environmentId,
+                        SimultriaClientIds.Primary,
+                        out ApiResolvedClient client,
+                        out string identityError))
+                {
+                    throw new InvalidOperationException(identityError);
+                }
+
+                var persistenceIdentity =
+                    new AuthenticationPersistenceIdentity(
+                        SimultriaServiceIds.ApiV2.Value,
+                        environmentId.Value,
+                        client.BaseUrl,
+                        SimultriaClientIds.Primary.Value);
                 IDisposable targetRegistration =
-                    ViewerAuthenticationTargetRegistry.Register(
+                    AuthenticationTargetRegistry.Register(
                         targetId,
                         displayName,
                         session,
                         provider,
-                        provider);
+                        provider,
+                        persistenceIdentity);
                 return new BoundRegistration(
                     targetRegistration,
                     provider);
@@ -664,7 +550,7 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         private static void RemoveBinding(
-            SimultriaViewerAuthenticationProvider provider)
+            SimultriaAuthenticationProvider provider)
         {
             lock (BindingGate)
             {
@@ -692,11 +578,11 @@ namespace Deucarian.SimultriaViewerConnection
         private sealed class BoundRegistration : IDisposable
         {
             private IDisposable registration;
-            private SimultriaViewerAuthenticationProvider provider;
+            private SimultriaAuthenticationProvider provider;
 
             internal BoundRegistration(
                 IDisposable targetRegistration,
-                SimultriaViewerAuthenticationProvider authenticationProvider)
+                SimultriaAuthenticationProvider authenticationProvider)
             {
                 registration = targetRegistration;
                 provider = authenticationProvider;
@@ -705,7 +591,7 @@ namespace Deucarian.SimultriaViewerConnection
             public void Dispose()
             {
                 IDisposable currentRegistration = registration;
-                SimultriaViewerAuthenticationProvider currentProvider =
+                SimultriaAuthenticationProvider currentProvider =
                     provider;
                 registration = null;
                 provider = null;

@@ -8,16 +8,16 @@ using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 #if UNITY_EDITOR
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Credential-free development context for a Simultria-backed viewer.
     /// Environment URL resolution remains in Simultria API.
     /// </summary>
     [CreateAssetMenu(
-        menuName = "Deucarian/Viewer/Simultria Development Profile",
-        fileName = "SimultriaViewerDevelopmentProfile")]
-    public sealed class SimultriaViewerDevelopmentProfile : ScriptableObject
+        menuName = "Deucarian/Viewer/Simultria Development Context",
+        fileName = "SimultriaViewerDevelopmentContext")]
+    public sealed class SimultriaViewerDevelopmentContext : ScriptableObject
     {
         [SerializeField] private ApiEnvironmentId environmentId =
             SimultriaEnvironmentIds.Development;
@@ -41,13 +41,9 @@ namespace Deucarian.SimultriaViewerConnection
         [SerializeField] private string buildVersionOverride = string.Empty;
         [Tooltip(
             "Project-owned generic API connection. Hosts remain editable " +
-            "in that asset and are never stored in this development profile.")]
-        [SerializeField] private ApiConnectionProfile
-            apiConnectionProfileReference;
-        [Tooltip(
-            "Legacy Simultria API profile reference retained for existing " +
-            "serialized assets. New profiles should use API Connection Profile.")]
-        [SerializeField] private SimultriaApiProfile apiProfileReference;
+            "in that asset and are never stored in this development context.")]
+        [SerializeField] private ApiConnectionSettings
+            apiConnectionSettingsReference;
         [SerializeField] private int projectId;
         [SerializeField] private int modelId;
         [Tooltip(
@@ -60,12 +56,10 @@ namespace Deucarian.SimultriaViewerConnection
         [SerializeField] private bool forceShowLoadedModelObjects = true;
         [SerializeField, TextArea(3, 10)] private string metadataJson = string.Empty;
 
-        /// <summary>Optional stable environment identifier.</summary>
+        /// <summary>Explicit stable environment identifier.</summary>
         public ApiEnvironmentId EnvironmentId
         {
-            get => environmentId.IsEmpty
-                ? SimultriaEnvironmentIds.Development
-                : environmentId;
+            get => environmentId;
             set => environmentId = value;
         }
 
@@ -94,42 +88,16 @@ namespace Deucarian.SimultriaViewerConnection
             set => buildVersionOverride = value ?? string.Empty;
         }
 
-        /// <summary>
-        /// Preferred project-owned generic API connection profile.
-        /// </summary>
-        public ApiConnectionProfile ConnectionProfileReference
+        /// <summary>Project-owned generic API connection settings.</summary>
+        public ApiConnectionSettings ConnectionSettingsReference
         {
-            get => apiConnectionProfileReference;
-            set => apiConnectionProfileReference = value;
+            get => apiConnectionSettingsReference;
+            set => apiConnectionSettingsReference = value;
         }
 
-        /// <summary>
-        /// Legacy Simultria API composition asset. Retained so existing
-        /// serialized development profiles continue to load unchanged.
-        /// </summary>
-        public SimultriaApiProfile ApiProfileReference
-        {
-            get => apiProfileReference;
-            set => apiProfileReference = value;
-        }
-
-        /// <summary>
-        /// Legacy effective profile. This is null when a generic connection
-        /// profile is assigned so callers cannot silently ignore it.
-        /// </summary>
-        public SimultriaApiProfile EffectiveApiProfile =>
-            apiConnectionProfileReference != null
-                ? null
-                : apiProfileReference ?? SimultriaApiProfileDefaults.Load();
-
-        /// <summary>
-        /// The exact connection asset selected for identity checks. A legacy
-        /// package default is used only when neither explicit field is set.
-        /// </summary>
+        /// <summary>The exact settings asset selected for identity checks.</summary>
         public ScriptableObject EffectiveProfileReference =>
-            apiConnectionProfileReference != null
-                ? (ScriptableObject)apiConnectionProfileReference
-                : EffectiveApiProfile;
+            apiConnectionSettingsReference;
 
         public int ProjectId
         {
@@ -220,34 +188,23 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         /// <summary>
-        /// Creates the selected Simultria-compatible composition. Generic
-        /// profiles are validated through the Simultria adapter; the legacy
-        /// profile path remains available for serialized compatibility.
+        /// Creates the selected Simultria-compatible composition.
         /// </summary>
         public bool TryCreateComposition(
             out ApiComposition composition,
             out string error)
         {
-            if (apiConnectionProfileReference != null)
-            {
-                return SimultriaApiConnectionProfileAdapter
-                    .TryCreateComposition(
-                        apiConnectionProfileReference,
-                        out composition,
-                        out error);
-            }
-
-            SimultriaApiProfile legacyProfile = EffectiveApiProfile;
-            if (legacyProfile == null)
+            if (apiConnectionSettingsReference == null)
             {
                 composition = null;
                 error =
-                    "Assign an API connection profile to the Simultria " +
-                    "viewer development profile.";
+                    "Assign API connection settings to the Simultria " +
+                    "viewer development context.";
                 return false;
             }
 
-            return legacyProfile.TryCreateComposition(
+            return SimultriaApiConnectionSettingsAdapter.TryCreateComposition(
+                apiConnectionSettingsReference,
                 out composition,
                 out error);
         }
