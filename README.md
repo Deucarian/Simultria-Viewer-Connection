@@ -97,7 +97,7 @@ Then enter each environment host in that asset's inspector. The Simultria
 factory supplies the four blank slots and API v2 catalog; it supplies no
 deployment URL and never copies one into the development context.
 
-Open `Tools > Deucarian > Viewer > Simultria Connection` to select one project
+Open `Tools > Deucarian > Simultria Viewer Development` to select one project
 default. That selection is stored in:
 
 `ProjectSettings/DeucarianSimultriaViewerConnection.asset`
@@ -105,13 +105,15 @@ default. That selection is stored in:
 A developer may enable a local override. It is stored in the project's
 gitignored `UserSettings` and does not change the shared default.
 
-The window uses the shared Deucarian Editor chrome and shows:
+The compact default view shows one readiness summary, the active development
+context, its environment, the Auto-load on Play option, and a shortcut to open
+the context asset. Project defaults and gitignored local overrides share the
+same single context field.
 
-- the selected profile source;
-- the automatic build input and resolution source when enabled;
-- sanitized resolved Simultria environment status;
-- sanitized Viewer Authentication status; and
-- whether the scene's canonical command ingress is ready.
+Detailed connection diagnostics and the explicit credential-free local WebGL
+export remain available in the collapsed Advanced section. Authentication, API
+connection editing, and manual command testing stay in their existing
+package-owned tools instead of being duplicated here.
 
 It never displays or serializes an access token.
 
