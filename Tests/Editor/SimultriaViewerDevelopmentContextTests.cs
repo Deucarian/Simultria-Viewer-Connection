@@ -7,16 +7,16 @@ using Deucarian.Simultria.API.Configuration;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
-    public sealed class SimultriaViewerDevelopmentProfileTests
+    public sealed class SimultriaViewerDevelopmentContextTests
     {
-        private SimultriaViewerDevelopmentProfile profile;
+        private SimultriaViewerDevelopmentContext profile;
 
         [SetUp]
         public void SetUp()
         {
-            profile = ScriptableObject.CreateInstance<SimultriaViewerDevelopmentProfile>();
+            profile = ScriptableObject.CreateInstance<SimultriaViewerDevelopmentContext>();
             profile.EnvironmentId = new ApiEnvironmentId("simultria.development");
             profile.ProjectId = 832;
             profile.ModelId = 41;
@@ -70,6 +70,21 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
+        public void BlankEnvironmentNeverFallsBackToDevelopment()
+        {
+            profile.EnvironmentId = default(ApiEnvironmentId);
+
+            bool created = profile.TryCreatePayload(
+                12,
+                out _,
+                out string error);
+
+            Assert.That(created, Is.False);
+            Assert.That(error, Does.Contain("environment is required"));
+            Assert.That(profile.EnvironmentId.IsEmpty, Is.True);
+        }
+
+        [Test]
         public void RejectsSecretLikeMetadataAtAnyDepth()
         {
             profile.MetadataJson = "{\"nested\":{\"access_token\":\"never\"}}";
@@ -81,41 +96,42 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
-        public void ResolvesAssignedGenericConnectionProfile()
+        public void ResolvesAssignedGenericConnectionSettings()
         {
-            SimultriaApiProfile legacyProfile =
-                SimultriaApiProfileDefaults.Load();
-            Assert.That(legacyProfile, Is.Not.Null);
-            ApiEnvironmentProfile configuredDevelopment = null;
+            ApiServiceDefinition definition =
+                SimultriaApiDefinitionDefaults.LoadServiceDefinition();
+            Assert.That(definition, Is.Not.Null);
+            Assert.That(
+                definition.TryGetEnvironmentDescriptors(
+                    out IReadOnlyList<ApiEnvironmentDescriptor> descriptors,
+                    out string definitionError),
+                Is.True,
+                definitionError);
             var environments = new List<ApiEnvironmentProfile>();
-            foreach (ApiEnvironmentProfile source in legacyProfile.Environments)
+            foreach (ApiEnvironmentDescriptor descriptor in descriptors)
             {
-                if (source == null ||
-                    !source.TryGetId(out var environmentId) ||
-                    environmentId != SimultriaEnvironmentIds.Development)
+                ApiEnvironmentProfile environment =
+                    ScriptableObject.CreateInstance<ApiEnvironmentProfile>();
+                environment.EnvironmentId = descriptor.EnvironmentId.Value;
+                environment.DisplayName = descriptor.DisplayName;
+                environment.Clients.Add(new ApiNamedClientDefinition
                 {
-                    environments.Add(source);
-                    continue;
-                }
-
-                configuredDevelopment = Object.Instantiate(source);
-                Assert.That(
-                    configuredDevelopment.TryGetClient(
-                        SimultriaClientIds.Primary,
-                        out ApiNamedClientDefinition client),
-                    Is.True);
-                client.BaseUrl = "https://simultria-viewer.invalid";
-                environments.Add(configuredDevelopment);
+                    ClientId = SimultriaClientIds.Primary.Value,
+                    BaseUrl = descriptor.EnvironmentId ==
+                        SimultriaEnvironmentIds.Development
+                        ? "https://simultria-viewer.invalid"
+                        : string.Empty
+                });
+                environments.Add(environment);
             }
 
-            ApiConnectionProfile connectionProfile =
-                ApiConnectionProfile.CreateTransient(
+            ApiConnectionSettings connectionSettings =
+                ApiConnectionSettings.CreateTransient(
                     environments,
-                    legacyProfile.EndpointCatalog,
-                    SimultriaEnvironmentDescriptors.Standard);
+                    definition);
             try
             {
-                profile.ConnectionProfileReference = connectionProfile;
+                profile.ConnectionSettingsReference = connectionSettings;
 
                 Assert.That(
                     profile.TryResolveEnvironment(
@@ -126,19 +142,22 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 Assert.That(status.IsResolved, Is.True, status.Message);
                 Assert.That(
                     profile.EffectiveProfileReference,
-                    Is.SameAs(connectionProfile));
+                    Is.SameAs(connectionSettings));
             }
             finally
             {
-                Object.DestroyImmediate(connectionProfile);
-                Object.DestroyImmediate(configuredDevelopment);
+                Object.DestroyImmediate(connectionSettings);
+                foreach (ApiEnvironmentProfile environment in environments)
+                {
+                    Object.DestroyImmediate(environment);
+                }
             }
         }
 
         [Test]
         public void SerializedProfileKeepsOnlySafeConnectionCompatibility()
         {
-            string[] fieldNames = typeof(SimultriaViewerDevelopmentProfile)
+            string[] fieldNames = typeof(SimultriaViewerDevelopmentContext)
                 .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
                 .Select(field => field.Name.ToLowerInvariant())
                 .ToArray();
@@ -153,11 +172,10 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             Assert.That(fieldNames.Any(name => name.Contains("media")), Is.False);
             Assert.That(
                 fieldNames,
-                Does.Contain("apiconnectionprofilereference"));
+                Does.Contain("apiconnectionsettingsreference"));
             Assert.That(
-                fieldNames,
-                Does.Contain("apiprofilereference"),
-                "The legacy serialized reference must remain readable.");
+                fieldNames.Any(name => name.Contains("apiprofile")),
+                Is.False);
         }
     }
 }

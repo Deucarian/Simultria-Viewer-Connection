@@ -1,14 +1,16 @@
 {
-  "name": "Deucarian.SimultriaViewerConnection.Tests",
-  "rootNamespace": "Deucarian.SimultriaViewerConnection.Tests",
+  "name": "Deucarian.SimultriaViewerIntegration.Tests",
+  "rootNamespace": "Deucarian.SimultriaViewerIntegration.Tests",
   "references": [
     "Deucarian.API",
     "Deucarian.CommandRouting",
     "Deucarian.Session",
     "Deucarian.Simultria.API",
-    "Deucarian.SimultriaViewerConnection",
-    "Deucarian.SimultriaViewerConnection.Editor",
-    "Deucarian.ViewerAuthentication",
+    "Deucarian.Simultria.UnityBuildRouting",
+    "Deucarian.SimultriaViewerIntegration",
+    "Deucarian.SimultriaViewerIntegration.Editor",
+    "Deucarian.Authentication",
+    "Deucarian.Authentication.ViewerIntegration",
     "Newtonsoft.Json"
   ],
   "includePlatforms": [

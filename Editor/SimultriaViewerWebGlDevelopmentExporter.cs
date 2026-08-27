@@ -5,7 +5,7 @@ using Deucarian.CommandRouting;
 using UnityEditor;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     /// <summary>Explicit secret-free export for local browser harnesses.</summary>
     public static class SimultriaViewerWebGlDevelopmentExporter
@@ -14,7 +14,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             "Assets/StreamingAssets/simultria-viewer-context.json";
 
         public static bool TryExport(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             out string message)
         {
             if (!SimultriaViewerDevelopmentCommandService.TryCreateCommand(
@@ -34,7 +34,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         /// local development build independent from automatic runtime routing.
         /// </summary>
         public static bool TryExport(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             ApiEnvironmentId effectiveEnvironmentId,
             out string message)
         {

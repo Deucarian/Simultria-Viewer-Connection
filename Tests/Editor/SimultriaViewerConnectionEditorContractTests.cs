@@ -1,11 +1,11 @@
 using NUnit.Framework;
 using Deucarian.API.Configuration;
 using Deucarian.API.Models;
-using Deucarian.SimultriaViewerConnection.Editor;
-using Deucarian.ViewerAuthentication;
+using Deucarian.SimultriaViewerIntegration.Editor;
+using Deucarian.Authentication;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
     public sealed class SimultriaViewerConnectionEditorContractTests
     {
@@ -43,14 +43,14 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void PlayModeAutoLoadCreatesTheSharedRuntimeProvider()
         {
-            SimultriaViewerDevelopmentProfile profile =
+            SimultriaViewerDevelopmentContext profile =
                 ScriptableObject.CreateInstance<
-                    SimultriaViewerDevelopmentProfile>();
-            ApiConnectionProfile connection =
-                ScriptableObject.CreateInstance<ApiConnectionProfile>();
+                    SimultriaViewerDevelopmentContext>();
+            ApiConnectionSettings connection =
+                ScriptableObject.CreateInstance<ApiConnectionSettings>();
             try
             {
-                profile.ConnectionProfileReference = connection;
+                profile.ConnectionSettingsReference = connection;
                 var environment = new ApiEnvironmentId(
                     "simultria.development");
 

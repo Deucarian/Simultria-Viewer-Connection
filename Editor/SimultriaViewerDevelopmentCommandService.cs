@@ -4,26 +4,26 @@ using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
-using Deucarian.ViewerAuthentication;
+using Deucarian.Authentication;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     internal static class SimultriaViewerDevelopmentCommandService
     {
         internal const string AuthenticationRequiredMessage =
-            "Waiting for authentication. Open Tools/Deucarian/Viewer/Authentication.";
+            "Waiting for authentication. Open Tools/Deucarian/Authentication.";
 
         public static bool TryCreateCommand(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             out CommandEnvelope command,
             out string error)
         {
             command = null;
             if (profile == null)
             {
-                error = "A Simultria viewer development profile is required.";
+                error = "A Simultria viewer development context is required.";
                 return false;
             }
 
@@ -42,7 +42,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         internal static bool TryCreateCommand(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             ApiEnvironmentId effectiveEnvironmentId,
             out CommandEnvelope command,
             out string error)
@@ -50,7 +50,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             command = null;
             if (profile == null)
             {
-                error = "A Simultria viewer development profile is required.";
+                error = "A Simultria viewer development context is required.";
                 return false;
             }
 
@@ -78,7 +78,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         internal static async Task<DevelopmentCommandCreation>
             CreateCommandAsync(
-                SimultriaViewerDevelopmentProfile profile,
+                SimultriaViewerDevelopmentContext profile,
                 SimultriaViewerEnvironmentResolver resolver,
                 CancellationToken cancellationToken)
         {
@@ -86,7 +86,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             {
                 return DevelopmentCommandCreation.Failure(
                     null,
-                    "A Simultria viewer development profile is required.");
+                    "A Simultria viewer development context is required.");
             }
 
             if (resolver == null)
@@ -127,7 +127,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         public static bool TryResolveLivePort(
             out CommandRoutePortBehaviour port,
-            out ViewerAuthenticationTarget authenticationTarget,
+            out AuthenticationTarget authenticationTarget,
             out string error)
         {
             port = null;
@@ -206,14 +206,14 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         {
             if (!TryResolveLivePort(
                     out CommandRoutePortBehaviour port,
-                    out ViewerAuthenticationTarget authenticationTarget,
+                    out AuthenticationTarget authenticationTarget,
                     out string error))
             {
                 return CommandResult.Failure("viewer_not_ready", error);
             }
 
-            if (!SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                    out SimultriaViewerDevelopmentProfile profile,
+            if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
+                    out SimultriaViewerDevelopmentContext profile,
                     out _,
                     out error))
             {
@@ -232,8 +232,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         internal static async Task<CommandResult> DispatchToPortAsync(
             CommandEnvelope command,
-            SimultriaViewerDevelopmentProfile profile,
-            ViewerAuthenticationTarget authenticationTarget,
+            SimultriaViewerDevelopmentContext profile,
+            AuthenticationTarget authenticationTarget,
             CommandRoutePortBehaviour port,
             CancellationToken cancellationToken)
         {
@@ -264,8 +264,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         internal static async Task<LiveCommandPreparation>
             PrepareLiveCommandAsync(
                 CommandEnvelope command,
-                SimultriaViewerDevelopmentProfile profile,
-                ViewerAuthenticationTarget authenticationTarget,
+                SimultriaViewerDevelopmentContext profile,
+                AuthenticationTarget authenticationTarget,
                 CancellationToken cancellationToken)
         {
             if (command == null || profile == null ||

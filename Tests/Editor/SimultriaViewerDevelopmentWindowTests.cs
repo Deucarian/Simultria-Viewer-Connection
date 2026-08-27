@@ -1,19 +1,19 @@
 using System.Linq;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
-using Deucarian.SimultriaViewerConnection.Editor;
+using Deucarian.SimultriaViewerIntegration.Editor;
 using NUnit.Framework;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
-    public sealed class SimultriaViewerConnectionWindowTests
+    public sealed class SimultriaViewerDevelopmentWindowTests
     {
         [Test]
         public void BuildEnvironmentOptionsUsesCanonicalEnvironmentOrder()
         {
             ApiEnvironmentId emptyEnvironmentId = default;
 
-            SimultriaViewerConnectionWindow.BuildEnvironmentOptions(
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
                 emptyEnvironmentId,
                 out string[] options,
                 out ApiEnvironmentId[] values,
@@ -48,7 +48,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void BuildEnvironmentOptionsSelectsTesting()
         {
-            SimultriaViewerConnectionWindow.BuildEnvironmentOptions(
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
                 SimultriaEnvironmentIds.Testing,
                 out _,
                 out ApiEnvironmentId[] values,
@@ -64,7 +64,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         public void BuildEnvironmentOptionsPreservesCustomId()
         {
             var custom = new ApiEnvironmentId("simultria.custom");
-            SimultriaViewerConnectionWindow.BuildEnvironmentOptions(
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
                 custom,
                 out string[] options,
                 out ApiEnvironmentId[] values,
@@ -82,7 +82,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         [Test]
         public void BuildDirectoryOptionsRequireAnExplicitHostEnvironment()
         {
-            SimultriaViewerConnectionWindow.BuildDirectoryEnvironmentOptions(
+            SimultriaViewerDevelopmentWindow.BuildDirectoryEnvironmentOptions(
                 default(ApiEnvironmentId),
                 out string[] options,
                 out ApiEnvironmentId[] values,

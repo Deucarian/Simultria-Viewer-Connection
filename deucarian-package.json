@@ -1,19 +1,19 @@
 {
-  "packageId": "com.deucarian.simultria-viewer-connection",
-  "displayName": "Deucarian Simultria Viewer Connection",
+  "packageId": "com.deucarian.simultria-viewer-integration",
+  "displayName": "Deucarian Simultria Viewer Integration",
   "samplePolicy": "tool",
   "ownedCapabilities": [
-    "simultria-viewer-development-connection"
+    "simultria-viewer-integration"
   ],
   "runtimeAssemblies": [
-    "Deucarian.SimultriaViewerConnection"
+    "Deucarian.SimultriaViewerIntegration"
   ],
   "editorAssemblies": [
-    "Deucarian.SimultriaViewerConnection.Editor"
+    "Deucarian.SimultriaViewerIntegration.Editor"
   ],
   "sampleAssemblies": [],
   "testAssemblies": [
-    "Deucarian.SimultriaViewerConnection.Tests"
+    "Deucarian.SimultriaViewerIntegration.Tests"
   ],
   "requiredDependencies": [
     "com.deucarian.api",
@@ -22,7 +22,7 @@
     "com.deucarian.logging",
     "com.deucarian.session",
     "com.deucarian.simultria-api",
-    "com.deucarian.viewer-authentication",
+    "com.deucarian.authentication",
     "com.unity.nuget.newtonsoft-json"
   ],
   "optionalVersionDefinedDependencies": [],

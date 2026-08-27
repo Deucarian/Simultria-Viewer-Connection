@@ -1,6 +1,6 @@
 using UnityEditor;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     [InitializeOnLoad]
     internal sealed class SimultriaViewerEditorProfileProviderRegistration :
@@ -13,11 +13,11 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         public bool TryResolve(
-            out SimultriaViewerDevelopmentProfile profile,
+            out SimultriaViewerDevelopmentContext profile,
             out string source,
             out string error)
         {
-            return SimultriaViewerDevelopmentProfileSelector.TryResolve(
+            return SimultriaViewerDevelopmentContextSelector.TryResolve(
                 out profile,
                 out source,
                 out error);

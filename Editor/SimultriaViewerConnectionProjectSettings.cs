@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     [FilePath(
         SettingsPath,
@@ -17,7 +17,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         [SerializeField] private bool autoLoadInPlayMode =
             DefaultAutoLoadInPlayMode;
 
-        public SimultriaViewerDevelopmentProfile DefaultProfile
+        public SimultriaViewerDevelopmentContext DefaultProfile
         {
             get => LoadProfile(defaultProfileGuid);
             set
@@ -52,7 +52,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
         }
 
-        internal static SimultriaViewerDevelopmentProfile LoadProfile(string guid)
+        internal static SimultriaViewerDevelopmentContext LoadProfile(string guid)
         {
             if (string.IsNullOrWhiteSpace(guid))
             {
@@ -62,10 +62,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             string path = AssetDatabase.GUIDToAssetPath(guid.Trim());
             return string.IsNullOrWhiteSpace(path)
                 ? null
-                : AssetDatabase.LoadAssetAtPath<SimultriaViewerDevelopmentProfile>(path);
+                : AssetDatabase.LoadAssetAtPath<SimultriaViewerDevelopmentContext>(path);
         }
 
-        private static string ToGuid(SimultriaViewerDevelopmentProfile profile)
+        private static string ToGuid(SimultriaViewerDevelopmentContext profile)
         {
             if (profile == null)
             {

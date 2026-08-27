@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo(
-    "Deucarian.SimultriaViewerConnection.Tests")]
+    "Deucarian.SimultriaViewerIntegration.Tests")]
 [assembly: InternalsVisibleTo(
-    "Deucarian.SimultriaViewerConnection.Editor")]
+    "Deucarian.SimultriaViewerIntegration.Editor")]

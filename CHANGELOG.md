@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.0] - 2026-08-26
+
+### Breaking
+
+- Renamed the package to `com.deucarian.simultria-viewer-integration` and the
+  credential-free editor asset to `SimultriaViewerDevelopmentContext`.
+- Removed every `SimultriaApiProfile` compatibility path and implicit package
+  connection fallback. Consumers now supply `ApiConnectionSettings` explicitly.
+- Updated the API and Simultria API dependencies to their new major versions.
+- Updated Command Routing and Logging to the coordinated editor UX releases.
+- Renamed the editor workflow type to
+  `SimultriaViewerDevelopmentWindow` and removed remaining Connection UI copy.
+- Derived the footer from installed package metadata and moved build
+  configuration creation to the Build capability menu.
+
 ## [0.5.1] - 2026-08-25
 
 ### Added
@@ -117,7 +132,7 @@
 
 ## [0.3.0] - 2026-08-20
 
-- Added generic `ApiConnectionProfile` authentication registration overloads,
+- Added generic `ApiConnectionSettings` authentication registration overloads,
   validated through Simultria API's reusable connection adapter.
 - Made development profiles prefer a project-owned generic connection while
   retaining their legacy `SimultriaApiProfile` field and APIs for serialized

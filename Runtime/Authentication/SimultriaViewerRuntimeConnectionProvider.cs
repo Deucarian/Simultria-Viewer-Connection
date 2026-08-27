@@ -4,10 +4,10 @@ using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
-using Deucarian.ViewerAuthentication;
+using Deucarian.Authentication;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Supplies the optional generic viewer runtime with one Simultria-backed
@@ -19,50 +19,27 @@ namespace Deucarian.SimultriaViewerConnection
         public const string ProviderId = "simultria.runtime-connection";
 
         private readonly object gate = new object();
-        private readonly ApiConnectionProfile connectionProfile;
-        private readonly SimultriaApiProfile legacyApiProfile;
+        private readonly ApiConnectionSettings connectionSettings;
         private readonly ApiEnvironmentId environmentId;
-        private ViewerAuthenticationSession initialSession;
+        private AuthenticationSession initialSession;
         private bool leased;
 
         /// <summary>
-        /// Creates a provider from a project-owned generic connection
-        /// profile. Deployment hosts remain authored in that profile.
+        /// Creates a provider from project-owned connection settings.
         /// </summary>
         public SimultriaViewerRuntimeConnectionProvider(
-            ApiConnectionProfile profile,
+            ApiConnectionSettings profile,
             ApiEnvironmentId environment)
             : this(profile, environment, null)
         {
         }
 
         internal SimultriaViewerRuntimeConnectionProvider(
-            ApiConnectionProfile profile,
+            ApiConnectionSettings profile,
             ApiEnvironmentId environment,
-            ViewerAuthenticationSession session)
+            AuthenticationSession session)
         {
-            connectionProfile = profile;
-            environmentId = environment;
-            initialSession = session;
-        }
-
-        /// <summary>
-        /// Legacy constructor retained for source compatibility. New
-        /// integrations should use <see cref="ApiConnectionProfile"/>.
-        /// </summary>
-        public SimultriaViewerRuntimeConnectionProvider(
-            SimultriaApiProfile profile,
-            ApiEnvironmentId environment)
-            : this(profile, environment, null)
-        {
-        }
-
-        internal SimultriaViewerRuntimeConnectionProvider(
-            SimultriaApiProfile profile,
-            ApiEnvironmentId environment,
-            ViewerAuthenticationSession session)
-        {
-            legacyApiProfile = profile;
+            connectionSettings = profile;
             environmentId = environment;
             initialSession = session;
         }
@@ -87,7 +64,7 @@ namespace Deucarian.SimultriaViewerConnection
                 leased = true;
             }
 
-            ViewerAuthenticationSession session = initialSession;
+            AuthenticationSession session = initialSession;
             initialSession = null;
             IDisposable targetRegistration = null;
             SimultriaViewerRuntimeConnectionLifetime lifetime = null;
@@ -102,16 +79,11 @@ namespace Deucarian.SimultriaViewerConnection
                         out ApiResolvedClient resolvedClient,
                         out error))
                 {
-                    if (session != null)
-                    {
-                        _ = session.ClearAsync(CancellationToken.None);
-                    }
-
                     ReleaseLease();
                     return false;
                 }
 
-                session = session ?? ViewerAuthenticationSession.CreateTransient();
+                session = session ?? AuthenticationSession.CreateTransient();
 
                 IApiClient apiClient =
                     SimultriaViewerConnectionAuthentication
@@ -124,7 +96,6 @@ namespace Deucarian.SimultriaViewerConnection
                         out targetRegistration,
                         out error))
                 {
-                    _ = session.ClearAsync(CancellationToken.None);
                     ReleaseLease();
                     return false;
                 }
@@ -151,11 +122,6 @@ namespace Deucarian.SimultriaViewerConnection
             {
                 lifetime?.Dispose();
                 targetRegistration?.Dispose();
-                if (session != null)
-                {
-                    _ = session.ClearAsync(CancellationToken.None);
-                }
-
                 if (lifetime == null)
                 {
                     ReleaseLease();
@@ -179,47 +145,20 @@ namespace Deucarian.SimultriaViewerConnection
             out ApiComposition composition,
             out string error)
         {
-            if (connectionProfile != null)
-            {
-                return SimultriaApiConnectionProfileAdapter
-                    .TryCreateComposition(
-                        connectionProfile,
-                        out composition,
-                        out error);
-            }
-
-            if (legacyApiProfile != null)
-            {
-                return legacyApiProfile.TryCreateComposition(
-                    out composition,
-                    out error);
-            }
-
-            composition = null;
-            error = "A Simultria API connection profile is required.";
-            return false;
+            return SimultriaApiConnectionSettingsAdapter.TryCreateComposition(
+                connectionSettings,
+                out composition,
+                out error);
         }
 
         private bool TryRegister(
-            IViewerAuthenticationSession session,
+            IAuthenticationSession session,
             IApiClient apiClient,
             out IDisposable registration,
             out string error)
         {
-            if (connectionProfile != null)
-            {
-                return SimultriaViewerConnectionAuthentication.TryRegister(
-                    connectionProfile,
-                    environmentId,
-                    session,
-                    out registration,
-                    out _,
-                    out error,
-                    apiClient);
-            }
-
             return SimultriaViewerConnectionAuthentication.TryRegister(
-                legacyApiProfile,
+                connectionSettings,
                 environmentId,
                 session,
                 out registration,
@@ -234,12 +173,12 @@ namespace Deucarian.SimultriaViewerConnection
         IDisposable
     {
         private IDisposable registration;
-        private ViewerAuthenticationSession session;
+        private AuthenticationSession session;
         private Action release;
 
         internal SimultriaViewerRuntimeConnectionLifetime(
             IDisposable registration,
-            ViewerAuthenticationSession session,
+            AuthenticationSession session,
             Action release)
         {
             this.registration = registration;
@@ -247,12 +186,11 @@ namespace Deucarian.SimultriaViewerConnection
             this.release = release;
         }
 
-        internal ViewerAuthenticationSession Session => session;
+        internal AuthenticationSession Session => session;
 
         public void Dispose()
         {
             IDisposable currentRegistration = registration;
-            ViewerAuthenticationSession currentSession = session;
             Action currentRelease = release;
             registration = null;
             session = null;
@@ -263,70 +201,9 @@ namespace Deucarian.SimultriaViewerConnection
             }
             finally
             {
-                try
-                {
-                    if (currentSession != null)
-                    {
-                        _ = currentSession.ClearAsync(CancellationToken.None);
-                    }
-                }
-                finally
-                {
-                    currentRelease?.Invoke();
-                }
+                currentRelease?.Invoke();
             }
         }
     }
 
-    internal static class SimultriaViewerRuntimeConnectionBootstrap
-    {
-        private static IDisposable providerRegistration;
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void RegisterProvider()
-        {
-            TryRegisterDefaultProvider();
-        }
-
-        /// <summary>
-        /// Registers the legacy package default only when it is actually
-        /// configured. Blank package defaults leave the generic viewer
-        /// registry empty so a project-owned composition can take over.
-        /// </summary>
-        internal static bool TryRegisterDefaultProvider()
-        {
-            providerRegistration?.Dispose();
-            providerRegistration = null;
-            try
-            {
-                SimultriaApiProfile profile =
-                    SimultriaApiProfileDefaults.Load();
-                if (profile == null ||
-                    !profile.TryCreateComposition(
-                        out ApiComposition composition,
-                        out _) ||
-                    !composition.TryResolveClient(
-                        SimultriaEnvironmentIds.Development,
-                        SimultriaClientIds.Primary,
-                        out _,
-                        out _))
-                {
-                    return false;
-                }
-
-                providerRegistration =
-                    ViewerRuntimeConnectionProviderRegistry.Register(
-                        new SimultriaViewerRuntimeConnectionProvider(
-                            profile,
-                            SimultriaEnvironmentIds.Development));
-                return true;
-            }
-            catch (Exception)
-            {
-                providerRegistration?.Dispose();
-                providerRegistration = null;
-                return false;
-            }
-        }
-    }
 }

@@ -5,7 +5,7 @@ using Deucarian.Simultria.API.Models;
 using Deucarian.Simultria.API.Services;
 using NUnit.Framework;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
     public sealed class SimultriaViewerModelInitializationResolverTests
     {

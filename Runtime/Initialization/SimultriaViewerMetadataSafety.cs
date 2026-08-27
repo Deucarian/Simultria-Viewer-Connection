@@ -1,7 +1,7 @@
 using System;
 using Newtonsoft.Json.Linq;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>Rejects secret-bearing development metadata before dispatch/export.</summary>
     public static class SimultriaViewerMetadataSafety

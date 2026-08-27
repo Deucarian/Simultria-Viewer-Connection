@@ -1,8 +1,8 @@
 {
-  "name": "com.deucarian.simultria-viewer-connection",
-  "version": "0.5.1",
-  "displayName": "Deucarian Simultria Viewer Connection",
-  "description": "Optional Simultria environment, authentication, and development-context connection for Deucarian viewers.",
+  "name": "com.deucarian.simultria-viewer-integration",
+  "version": "1.0.0",
+  "displayName": "Deucarian Simultria Viewer Integration",
+  "description": "Viewer-specific Simultria adapter wiring and credential-free development context.",
   "unity": "6000.0",
   "license": "MIT",
   "author": {
@@ -20,13 +20,13 @@
     "development"
   ],
   "dependencies": {
-    "com.deucarian.api": "1.4.2",
-    "com.deucarian.command-routing": "0.1.2",
-    "com.deucarian.editor": "1.0.5",
-    "com.deucarian.logging": "1.0.2",
+    "com.deucarian.api": "2.0.0",
+    "com.deucarian.command-routing": "0.2.4",
+    "com.deucarian.editor": "1.1.0",
+    "com.deucarian.logging": "1.0.3",
     "com.deucarian.session": "1.0.6",
-    "com.deucarian.simultria-api": "0.4.1",
-    "com.deucarian.viewer-authentication": "0.5.1",
+    "com.deucarian.simultria-api": "1.0.0",
+    "com.deucarian.authentication": "1.0.0",
     "com.unity.nuget.newtonsoft-json": "3.2.2"
   }
 }

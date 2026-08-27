@@ -1,6 +1,6 @@
-# Deucarian Simultria Viewer Connection
+# Deucarian Simultria Viewer Integration
 
-`com.deucarian.simultria-viewer-connection` is the optional connection between
+`com.deucarian.simultria-viewer-integration` is the optional adapter between
 a generic Deucarian viewer and the Simultria backend ecosystem. Install it for
 Simultria-backed viewers; omit it from a vendor-neutral viewer.
 
@@ -12,7 +12,7 @@ The package deliberately does not turn authentication into a Simultria feature:
 - Viewer Authentication owns sessions, token lifecycle, secure local storage,
   and the shared authentication menu.
 - Command Routing owns the canonical command envelope and local scene ingress.
-- This package owns only the connection, credential-free development profile,
+- This package owns only the connection, credential-free development context,
   and development-time handoff into a running viewer.
 
 ## Install
@@ -20,11 +20,11 @@ The package deliberately does not turn authentication into a Simultria feature:
 Install the stable package branch in a Simultria-backed viewer:
 
 ```json
-"com.deucarian.simultria-viewer-connection": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
+"com.deucarian.simultria-viewer-integration": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
 ```
 
-Required package versions are declared in `package.json`, including API 1.4.2,
-Simultria API 0.4.1, Command Routing 0.1.2, and Viewer Authentication 0.5.1.
+Required package versions are declared in `package.json`, including API 2.0.0,
+Simultria API 1.0.0, Command Routing 0.1.2, and Viewer Authentication 0.5.1.
 
 ## Player build configuration
 
@@ -43,25 +43,23 @@ is created.
 
 `SimultriaViewerBuildConnectionGate` can hold a generic viewer bootstrap
 disabled until that decision and its runtime connection provider are ready.
-Development profiles and their manual/version override fields compile only in
+Development contexts and their manual/version override fields compile only in
 the Unity Editor and should live in an `Editor` folder or Editor-only settings.
 
-## Development profile
+## Development context
 
-Create a profile from:
+Create a context from:
 
-`Assets > Create > Deucarian > Viewer > Simultria Development Profile`
+`Assets > Create > Deucarian > Viewer > Simultria Development Context`
 
-The profile stores only:
+The context stores only:
 
 - an explicit Manual or Automatic-from-Unity-build-version mode;
 - a manual `ApiEnvironmentId` and a project-owned generic
-  `ApiConnectionProfile` reference;
+  `ApiConnectionSettings` reference;
 - for automatic mode only, the environment whose configured host exposes the
   public build directory, the portal product ID, and an optional local/editor
   build-version override;
-- a legacy `SimultriaApiProfile` reference retained for existing serialized
-  assets (the package default is used only when both references are empty);
 - project, model, and optional model-version IDs;
 - placement position, rotation, and scale;
 - the development-only force-show option; and
@@ -75,7 +73,7 @@ metadata keys are rejected recursively.
 
 Editor Manual mode preserves the existing behavior: an empty environment ID means
 Development, while an explicitly authored custom ID remains intact and is
-accepted when the connection profile configures it.
+accepted when the connection settings configure it.
 
 Editor Automatic mode uses `Application.version` unless the profile supplies an
 explicit local override. Player builds always use `Application.version` from
@@ -89,7 +87,7 @@ The lookup fails closed when the build version, product, directory environment,
 response identity, backend environment name, or resolved target environment is
 missing or invalid. There is deliberately no implicit Production host or
 Production fallback. Deployment hosts remain solely in the project-owned API
-connection profile.
+connection settings.
 
 Create the referenced connection from:
 
@@ -97,7 +95,7 @@ Create the referenced connection from:
 
 Then enter each environment host in that asset's inspector. The Simultria
 factory supplies the four blank slots and API v2 catalog; it supplies no
-deployment URL and never copies one into the development profile.
+deployment URL and never copies one into the development context.
 
 Open `Tools > Deucarian > Viewer > Simultria Connection` to select one project
 default. That selection is stored in:
@@ -121,10 +119,9 @@ It never displays or serializes an access token.
 
 The package registers one editor-lifetime Viewer Authentication target backed
 by a private transient session and a resolved Simultria API provider. A
-selected development profile overrides its API composition and environment;
-automatic profiles register only after their portal result has resolved. When
-none is selected, the credential-free Simultria API package profile and
-`simultria.development` are used. Project and model IDs are never required
+selected development context overrides its API composition and environment;
+automatic contexts register only after their portal result has resolved. When
+none is selected, no authentication target is registered. Project and model IDs are never required
 merely to sign in or refresh authentication. This makes the shared
 `Tools > Deucarian > Viewer > Authentication` window usable outside Play Mode
 without any product-local login or validation endpoint assets.
@@ -133,7 +130,7 @@ The target uses the stable ID
 `SimultriaViewerConnectionAuthentication.DefaultTargetId`. Viewer
 Authentication remains the sole owner of optional remembered-token storage in
 ignored `UserSettings`; this package never reads a token into the development
-profile. A remembered token owned by the legacy `report-viewer` target is
+context. A remembered token owned by the historical `report-viewer` target is
 rebound once to the stable package target through Viewer Authentication's
 token-opaque Editor facade. Other target owners are never claimed. The editor target is
 synchronously removed before Play Mode and as soon as any real viewer target
@@ -190,7 +187,7 @@ automatic profile; consumers pass the explicit result from
 Before that request, the package verifies that the sole target is the stable
 `simultria-viewer` target and is backed by the same Simultria provider, API
 profile, environment, and resolved authentication composition selected by the
-development profile. An arbitrary viewer target or environment mismatch fails
+development context. An arbitrary viewer target or environment mismatch fails
 closed instead of forwarding its bearer.
 
 Play Mode auto-load waits for exactly one live Viewer Authentication target with
@@ -200,14 +197,14 @@ routes the JSON through `ICommandRoutePort.RouteMessageAsync` using transport
 Report, Activity, or template bootstrap directly and stores no active-viewer
 dropdown or target ID.
 
-For a selected manual development profile, the editor also registers that
-profile's generic runtime connection before the viewer scene starts. Generic
+For a selected manual development context, the editor also registers that
+context's generic runtime connection before the viewer scene starts. Generic
 viewer templates therefore lease the same stable authentication target, API
 client, environment, and trusted model origin that the auto-loader uses to
 resolve and dispatch `initialize_viewer`.
 
 Auto-load is opt-in for a newly imported package. Neutral templates and Activity
-Viewer therefore do not warn on every Play when no development profile is
+Viewer therefore do not warn on every Play when no development context is
 selected. Report Viewer can keep its explicit committed project setting enabled.
 
 ## Consumer composition
@@ -239,19 +236,19 @@ markers, Activity visualization, media, and commands remain in their products.
 For authentication composition, call
 `SimultriaViewerConnectionAuthentication.TryRegister`. It resolves the profile's
 environment through Simultria API, creates one
-`SimultriaViewerAuthenticationProvider`, and registers that same provider for
+`SimultriaAuthenticationProvider`, and registers that same provider for
 generic acquisition and server validation in Viewer Authentication.
 
 The package default contains no deployment host, so merely installing this
 package does not claim the fail-closed runtime provider registry. A project or
 coupling package that uses the generic runtime can explicitly register its
-project-owned connection profile:
+project-owned connection settings:
 
 ```csharp
 IDisposable runtimeProviderRegistration =
     ViewerRuntimeConnectionProviderRegistry.Register(
         new SimultriaViewerRuntimeConnectionProvider(
-            apiConnectionProfile,
+            apiConnectionSettings,
             environmentId));
 ```
 
@@ -259,21 +256,16 @@ The provider creates no live authentication target until a generic viewer
 resolves it. The resulting lease owns the stable `simultria-viewer` session,
 an API client backed by that exact session, the profile-resolved API base URL,
 and its exact authenticated origin. Dispose the registration with the owning
-composition. Existing installations with a configured legacy package default
-retain automatic registration; blank defaults deliberately leave consumer
-fallback available.
-
-The legacy `SimultriaApiProfile` constructor and registration overloads remain
-available. Because the generic and legacy profile types are unrelated
-overloads, pass a typed profile variable (or an explicit cast) rather than a
-bare `null` literal when testing missing configuration.
+composition. There is no package-level connection fallback: a project must
+explicitly own and select its connection settings before registration can
+succeed.
 
 Single-viewer runtimes should use the overload without target strings so Edit
 Mode and Play Mode keep the same stable identity:
 
 ```csharp
 SimultriaViewerConnectionAuthentication.TryRegister(
-    apiConnectionProfile,
+    apiConnectionSettings,
     environmentId,
     authenticationSession,
     out IDisposable authenticationRegistration,
@@ -287,7 +279,7 @@ each consumer:
 ```csharp
 SimultriaViewerEnvironmentResolution resolution =
     await SimultriaViewerEnvironmentResolver.CreateDefault()
-        .ResolveAsync(developmentProfile, cancellationToken);
+        .ResolveAsync(developmentContext, cancellationToken);
 
 if (!resolution.Succeeded)
 {
@@ -296,7 +288,7 @@ if (!resolution.Succeeded)
 }
 
 SimultriaViewerConnectionAuthentication.TryRegister(
-    developmentProfile,
+    developmentContext,
     resolution.EnvironmentId,
     authenticationSession,
     out IDisposable authenticationRegistration,
@@ -343,7 +335,7 @@ Report Viewer can delete its local default-selection, auto-load, context window,
 and secret-bearing WebGL export logic after it:
 
 1. migrates each old `ViewerDevProjectContextAsset` to a
-   `SimultriaViewerDevelopmentProfile` and selects the shared project default;
+   `SimultriaViewerDevelopmentContext` and selects the shared project default;
 2. maps the package initialization payload into its current project context;
 3. registers the package's initialization handler in its existing Command
    Routing runtime;
