@@ -2,7 +2,7 @@ using Deucarian.API.Models;
 using UnityEditor;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     internal static class SimultriaViewerEditorAuthenticationBinding
     {

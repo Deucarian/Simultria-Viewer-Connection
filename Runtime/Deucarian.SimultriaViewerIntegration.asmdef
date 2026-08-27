@@ -1,13 +1,15 @@
 {
-  "name": "Deucarian.SimultriaViewerConnection",
-  "rootNamespace": "Deucarian.SimultriaViewerConnection",
+  "name": "Deucarian.SimultriaViewerIntegration",
+  "rootNamespace": "Deucarian.SimultriaViewerIntegration",
   "references": [
     "Deucarian.API",
     "Deucarian.CommandRouting",
     "Deucarian.Logging",
     "Deucarian.Session",
     "Deucarian.Simultria.API",
-    "Deucarian.ViewerAuthentication",
+    "Deucarian.Simultria.UnityBuildRouting",
+    "Deucarian.Authentication",
+    "Deucarian.Authentication.ViewerIntegration",
     "Newtonsoft.Json"
   ],
   "includePlatforms": [],

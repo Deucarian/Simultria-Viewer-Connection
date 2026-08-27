@@ -9,18 +9,18 @@ using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.Simultria.API.Models;
-using Deucarian.SimultriaViewerConnection.Editor;
-using Deucarian.ViewerAuthentication;
+using Deucarian.SimultriaViewerIntegration.Editor;
+using Deucarian.Authentication;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Tests
+namespace Deucarian.SimultriaViewerIntegration.Tests
 {
     public sealed class SimultriaViewerEnvironmentResolverTests
     {
         private readonly List<UnityEngine.Object> ownedObjects =
             new List<UnityEngine.Object>();
-        private SimultriaViewerDevelopmentProfile profile;
+        private SimultriaViewerDevelopmentContext profile;
         private IDisposable hostSuspension;
 
         [SetUp]
@@ -31,8 +31,8 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 SimultriaViewerEditorAuthenticationHost.SuspendForTests();
             profile = Own(
                 ScriptableObject.CreateInstance<
-                    SimultriaViewerDevelopmentProfile>());
-            profile.ConnectionProfileReference = CreateConnectionProfile(
+                    SimultriaViewerDevelopmentContext>());
+            profile.ConnectionSettingsReference = CreateConnectionSettings(
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing);
             profile.EnvironmentId = SimultriaEnvironmentIds.Development;
@@ -61,7 +61,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         public async Task PlayerBuildUsesCompiledVersionAndBackendAssignment(
             string backendEnvironment)
         {
-            ApiConnectionProfile connection = CreateConnectionProfile(
+            ApiConnectionSettings connection = CreateConnectionSettings(
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing,
                 SimultriaEnvironmentIds.Acceptance,
@@ -69,7 +69,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             SimultriaViewerBuildConfiguration configuration = Own(
                 ScriptableObject.CreateInstance<
                     SimultriaViewerBuildConfiguration>());
-            configuration.ConnectionProfile = connection;
+            configuration.ConnectionSettings = connection;
             configuration.BuildDirectoryEnvironmentId =
                 SimultriaEnvironmentIds.Development;
             configuration.Product = "design_and_sales";
@@ -118,7 +118,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         public async Task EditorManualOverrideSupportsStandardEnvironments(
             string environment)
         {
-            profile.ConnectionProfileReference = CreateConnectionProfile(
+            profile.ConnectionSettingsReference = CreateConnectionSettings(
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing,
                 SimultriaEnvironmentIds.Acceptance,
@@ -192,7 +192,7 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         }
 
         [Test]
-        public async Task ManualModePreservesEmptyDevelopmentFallback()
+        public async Task ManualModeRejectsEmptyEnvironmentWithoutFallback()
         {
             profile.EnvironmentId = default(ApiEnvironmentId);
             profile.EnvironmentResolutionMode =
@@ -203,11 +203,9 @@ namespace Deucarian.SimultriaViewerConnection.Tests
             SimultriaViewerEnvironmentResolution result =
                 await resolver.ResolveAsync(profile);
 
-            Assert.That(result.Succeeded, Is.True, result.Message);
-            Assert.That(
-                result.EnvironmentId,
-                Is.EqualTo(SimultriaEnvironmentIds.Development));
-            Assert.That(result.Source, Is.EqualTo("Explicit Editor override"));
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.EnvironmentId.IsEmpty, Is.True);
+            Assert.That(result.Message, Does.Contain("not registered"));
             Assert.That(client.RequestCount, Is.Zero);
         }
 
@@ -422,8 +420,8 @@ namespace Deucarian.SimultriaViewerConnection.Tests
         public void UnresolvedAutomaticProfileCannotRegisterOrCreateCommand()
         {
             ConfigureAutomaticProfile();
-            ViewerAuthenticationSession session =
-                ViewerAuthenticationSession.CreateTransient();
+            AuthenticationSession session =
+                AuthenticationSession.CreateTransient();
 
             bool registered =
                 SimultriaViewerConnectionAuthentication.TryRegister(
@@ -459,8 +457,8 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 "testing");
             SimultriaViewerEnvironmentResolution result =
                 await CreateResolver(client, "unused").ResolveAsync(profile);
-            ViewerAuthenticationSession session =
-                ViewerAuthenticationSession.CreateTransient();
+            AuthenticationSession session =
+                AuthenticationSession.CreateTransient();
             IDisposable registration = null;
             try
             {
@@ -548,40 +546,40 @@ namespace Deucarian.SimultriaViewerConnection.Tests
                 new FixedBuildMetadataProvider(buildVersion));
         }
 
-        private ApiConnectionProfile CreateConnectionProfile(
+        private ApiConnectionSettings CreateConnectionSettings(
             params ApiEnvironmentId[] configuredIds)
         {
-            SimultriaApiProfile packageProfile =
-                SimultriaApiProfileDefaults.Load();
-            Assert.That(packageProfile, Is.Not.Null);
+            ApiServiceDefinition definition =
+                SimultriaApiDefinitionDefaults.LoadServiceDefinition();
+            Assert.That(definition, Is.Not.Null);
+            Assert.That(
+                definition.TryGetEnvironmentDescriptors(
+                    out IReadOnlyList<ApiEnvironmentDescriptor> descriptors,
+                    out string definitionError),
+                Is.True,
+                definitionError);
             var configured = new HashSet<ApiEnvironmentId>(configuredIds);
             var environments = new List<ApiEnvironmentProfile>();
-            foreach (ApiEnvironmentProfile source in packageProfile.Environments)
+            foreach (ApiEnvironmentDescriptor descriptor in descriptors)
             {
-                if (source == null ||
-                    !source.TryGetId(out ApiEnvironmentId environmentId) ||
-                    !configured.Contains(environmentId))
+                ApiEnvironmentProfile environment =
+                    Own(ScriptableObject.CreateInstance<ApiEnvironmentProfile>());
+                environment.EnvironmentId = descriptor.EnvironmentId.Value;
+                environment.DisplayName = descriptor.DisplayName;
+                environment.Clients.Add(new ApiNamedClientDefinition
                 {
-                    environments.Add(source);
-                    continue;
-                }
-
-                ApiEnvironmentProfile clone = Own(
-                    UnityEngine.Object.Instantiate(source));
-                Assert.That(
-                    clone.TryGetClient(
-                        SimultriaClientIds.Primary,
-                        out ApiNamedClientDefinition client),
-                    Is.True);
-                client.BaseUrl = "https://simultria-viewer.invalid";
-                environments.Add(clone);
+                    ClientId = SimultriaClientIds.Primary.Value,
+                    BaseUrl = configured.Contains(descriptor.EnvironmentId)
+                        ? "https://simultria-viewer.invalid"
+                        : string.Empty
+                });
+                environments.Add(environment);
             }
 
             return Own(
-                ApiConnectionProfile.CreateTransient(
+                ApiConnectionSettings.CreateTransient(
                     environments,
-                    packageProfile.EndpointCatalog,
-                    SimultriaEnvironmentDescriptors.Standard));
+                    definition));
         }
 
         private T Own<T>(T instance) where T : UnityEngine.Object

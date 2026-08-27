@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Deucarian.CommandRouting;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     public delegate Task<CommandResult> SimultriaViewerInitializationDelegate<TApplicationContext>(
         TApplicationContext application,

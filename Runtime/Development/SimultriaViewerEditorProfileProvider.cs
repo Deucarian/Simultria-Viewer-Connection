@@ -1,10 +1,10 @@
 #if UNITY_EDITOR
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     internal interface ISimultriaViewerEditorProfileProvider
     {
         bool TryResolve(
-            out SimultriaViewerDevelopmentProfile profile,
+            out SimultriaViewerDevelopmentContext profile,
             out string source,
             out string error);
     }
@@ -20,7 +20,7 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         internal static bool TryResolve(
-            out SimultriaViewerDevelopmentProfile profile,
+            out SimultriaViewerDevelopmentContext profile,
             out string source,
             out string error)
         {
@@ -28,7 +28,7 @@ namespace Deucarian.SimultriaViewerConnection
             {
                 profile = null;
                 source = "Editor override";
-                error = "The Simultria Viewer Connection Editor override " +
+                error = "The Simultria Viewer Development Editor override " +
                         "provider is unavailable.";
                 return false;
             }

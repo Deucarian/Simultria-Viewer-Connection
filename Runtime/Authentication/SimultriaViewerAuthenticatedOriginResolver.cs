@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Resolves explicitly configured Simultria model-content hosts that may

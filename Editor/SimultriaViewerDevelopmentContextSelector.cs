@@ -1,10 +1,10 @@
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     /// <summary>Resolves one shared project default with an explicit local override.</summary>
-    public static class SimultriaViewerDevelopmentProfileSelector
+    public static class SimultriaViewerDevelopmentContextSelector
     {
         public static bool TryResolve(
-            out SimultriaViewerDevelopmentProfile profile,
+            out SimultriaViewerDevelopmentContext profile,
             out string source,
             out string error)
         {
@@ -16,7 +16,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 source = "Local override";
                 if (profile == null)
                 {
-                    error = "Local profile override is enabled but no profile is assigned.";
+                    error = "Local context override is enabled but no context is assigned.";
                     return false;
                 }
 
@@ -28,7 +28,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             source = "Project default";
             if (profile == null)
             {
-                error = "No project-default Simultria viewer development profile is assigned.";
+                error = "No project-default Simultria viewer development context is assigned.";
                 return false;
             }
 
@@ -36,10 +36,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             return true;
         }
 
-        internal static SimultriaViewerDevelopmentProfile Resolve(
-            SimultriaViewerDevelopmentProfile projectDefault,
+        internal static SimultriaViewerDevelopmentContext Resolve(
+            SimultriaViewerDevelopmentContext projectDefault,
             bool useLocalOverride,
-            SimultriaViewerDevelopmentProfile localOverride)
+            SimultriaViewerDevelopmentContext localOverride)
         {
             return useLocalOverride ? localOverride : projectDefault;
         }

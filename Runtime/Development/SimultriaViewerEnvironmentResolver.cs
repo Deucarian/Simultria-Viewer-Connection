@@ -6,9 +6,10 @@ using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.Simultria.API.Models;
 using Deucarian.Simultria.API.Services;
+using Deucarian.Simultria.UnityBuildRouting;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>Reads immutable identity from the running Unity application.</summary>
     public sealed class SimultriaViewerApplicationBuildMetadataProvider :
@@ -73,29 +74,29 @@ namespace Deucarian.SimultriaViewerConnection
         /// used by ResolveForCurrentRuntimeAsync. Player
         /// builds can only receive the build configuration connection.
         /// </summary>
-        public bool TryResolveConnectionProfileForCurrentRuntime(
+        public bool TryResolveConnectionSettingsForCurrentRuntime(
             SimultriaViewerBuildConfiguration buildConfiguration,
-            out Deucarian.API.Configuration.ApiConnectionProfile
-                connectionProfile,
+            out Deucarian.API.Configuration.ApiConnectionSettings
+                connectionSettings,
             out string error)
         {
 #if UNITY_EDITOR
             if (runtimeContext.IsEditor)
             {
                 if (!SimultriaViewerEditorProfileProvider.TryResolve(
-                        out SimultriaViewerDevelopmentProfile editorProfile,
+                        out SimultriaViewerDevelopmentContext editorProfile,
                         out _,
                         out error))
                 {
-                    connectionProfile = null;
+                    connectionSettings = null;
                     return false;
                 }
 
-                connectionProfile = editorProfile.ConnectionProfileReference;
-                if (connectionProfile == null)
+                connectionSettings = editorProfile.ConnectionSettingsReference;
+                if (connectionSettings == null)
                 {
                     error = "The selected Editor override must reference a " +
-                            "generic API connection profile.";
+                            "generic API connection settings.";
                     return false;
                 }
 
@@ -104,12 +105,12 @@ namespace Deucarian.SimultriaViewerConnection
             }
 #endif
 
-            connectionProfile = buildConfiguration?.ConnectionProfile;
-            error = connectionProfile == null
+            connectionSettings = buildConfiguration?.ConnectionSettings;
+            error = connectionSettings == null
                 ? "The player build configuration has no API connection " +
-                  "profile."
+                  "settings."
                 : string.Empty;
-            return connectionProfile != null;
+            return connectionSettings != null;
         }
 
         /// <summary>
@@ -144,7 +145,7 @@ namespace Deucarian.SimultriaViewerConnection
         public Task<SimultriaViewerEnvironmentResolution>
             ResolveForCurrentRuntimeAsync(
                 SimultriaViewerBuildConfiguration buildConfiguration,
-                SimultriaViewerDevelopmentProfile editorProfile,
+                SimultriaViewerDevelopmentContext editorProfile,
                 CancellationToken cancellationToken =
                     default(CancellationToken))
         {
@@ -182,7 +183,7 @@ namespace Deucarian.SimultriaViewerConnection
         /// development-profile type are absent from player compilation.
         /// </summary>
         public Task<SimultriaViewerEnvironmentResolution> ResolveAsync(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             if (runtimeContext.IsEditor)
@@ -273,7 +274,7 @@ namespace Deucarian.SimultriaViewerConnection
 #if UNITY_EDITOR
         private Task<SimultriaViewerEnvironmentResolution>
             ResolveEditorProfileAsync(
-                SimultriaViewerDevelopmentProfile profile,
+                SimultriaViewerDevelopmentContext profile,
                 string source,
                 CancellationToken cancellationToken)
         {
@@ -351,171 +352,31 @@ namespace Deucarian.SimultriaViewerConnection
             const SimultriaViewerEnvironmentResolutionMode mode =
                 SimultriaViewerEnvironmentResolutionMode
                     .AutomaticFromUnityBuildVersion;
-            string product = (productValue ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(buildVersion))
+            SimultriaUnityBuildRoutingResult routing =
+                await new SimultriaUnityBuildRoutingService(
+                        apiClient,
+                        composition,
+                        directoryEnvironment)
+                    .ResolveAsync(
+                        buildVersion,
+                        productValue,
+                        cancellationToken);
+            if (!routing.Succeeded)
             {
                 return Failure(
                     mode,
-                    buildVersion,
-                    product,
-                    "build_version_missing",
-                    "Automatic environment resolution requires a Unity " +
-                    "build version.",
-                    editorOverrideActive);
-            }
-
-            if (string.IsNullOrWhiteSpace(product))
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_product_missing",
-                    "Automatic environment resolution requires a canonical " +
-                    "Simultria build product.",
-                    editorOverrideActive);
-            }
-
-            if (directoryEnvironment.IsEmpty)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_directory_environment_missing",
-                    "Choose the configured API environment that hosts the " +
-                    "Simultria Unity build directory.",
-                    editorOverrideActive);
-            }
-
-            ApiEnvironmentStatus directoryStatus =
-                composition.GetEnvironmentStatus(directoryEnvironment);
-            if (!directoryStatus.IsResolved)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_directory_environment_unavailable",
-                    directoryStatus.Message,
-                    editorOverrideActive);
-            }
-
-            if (apiClient == null)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_directory_client_missing",
-                    "A generic API client is required for automatic " +
-                    "environment resolution.",
-                    editorOverrideActive);
-            }
-
-            ApiResult<SimultriaResourceResponse<SimultriaUnityBuildVersionDto>>
-                lookup;
-            try
-            {
-                var service = new SimultriaUnityBuildVersionLookupService(
-                    apiClient,
-                    composition,
-                    directoryEnvironment);
-                lookup = await service.GetBuildVersionAsync(
-                    buildVersion,
-                    product,
-                    cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_directory_lookup_failed",
-                    "The Simultria Unity build directory lookup failed (" +
-                    exception.GetType().Name + ").",
-                    editorOverrideActive);
-            }
-
-            if (lookup?.IsSuccess != true || lookup.Data?.Data == null)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_directory_lookup_failed",
-                    BuildLookupFailureMessage(lookup),
-                    editorOverrideActive);
-            }
-
-            SimultriaUnityBuildVersionDto response = lookup.Data.Data;
-            if (!string.Equals(
-                    response.Version?.Trim(),
-                    buildVersion,
-                    StringComparison.Ordinal))
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_version_mismatch",
-                    "The Simultria Unity build directory returned a " +
-                    "different build version. No fallback version was used.",
-                    editorOverrideActive);
-            }
-
-            if (!string.Equals(
-                    response.Product?.Trim(),
-                    product,
-                    StringComparison.Ordinal))
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_product_mismatch",
-                    "The Simultria Unity build directory returned a " +
-                    "different product.",
-                    editorOverrideActive);
-            }
-
-            if (!SimultriaBuildEnvironmentNameMapper.TryMap(
-                    response.Environment,
-                    out ApiEnvironmentId resolvedEnvironment,
-                    out string mappingError))
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "build_environment_unknown",
-                    mappingError,
-                    editorOverrideActive);
-            }
-
-            ApiEnvironmentStatus resolvedStatus =
-                composition.GetEnvironmentStatus(resolvedEnvironment);
-            if (!resolvedStatus.IsResolved)
-            {
-                return Failure(
-                    mode,
-                    buildVersion,
-                    product,
-                    "resolved_environment_unavailable",
-                    resolvedStatus.Message,
+                    routing.BuildVersion,
+                    routing.Product,
+                    routing.ErrorCode,
+                    routing.Message,
                     editorOverrideActive);
             }
 
             return SimultriaViewerEnvironmentResolution.Success(
                 mode,
-                resolvedEnvironment,
-                buildVersion,
-                product,
+                routing.EnvironmentId,
+                routing.BuildVersion,
+                routing.Product,
                 "Simultria Unity build directory",
                 RuntimeKind(),
                 ApplicationName(),
@@ -524,7 +385,7 @@ namespace Deucarian.SimultriaViewerConnection
 
 #if UNITY_EDITOR
         private string ResolveEditorBuildVersion(
-            SimultriaViewerDevelopmentProfile profile)
+            SimultriaViewerDevelopmentContext profile)
         {
             string configured = profile.BuildVersionOverride;
             return string.IsNullOrWhiteSpace(configured)
@@ -566,15 +427,5 @@ namespace Deucarian.SimultriaViewerConnection
                 editorOverrideActive);
         }
 
-        private static string BuildLookupFailureMessage(
-            ApiResult<SimultriaResourceResponse<SimultriaUnityBuildVersionDto>>
-                result)
-        {
-            return result?.HttpStatusCode.HasValue == true
-                ? "The Simultria Unity build directory rejected the lookup " +
-                  "(HTTP " + result.HttpStatusCode.Value + ")."
-                : "The Simultria Unity build directory lookup did not return " +
-                  "a usable response.";
-        }
     }
 }

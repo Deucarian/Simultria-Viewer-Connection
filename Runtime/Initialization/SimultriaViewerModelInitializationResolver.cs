@@ -6,7 +6,7 @@ using Deucarian.API.Models;
 using Deucarian.Simultria.API.Models;
 using Deucarian.Simultria.API.Services;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Credential-free resolved model source for a live viewer initialization.
