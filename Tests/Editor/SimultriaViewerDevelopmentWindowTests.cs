@@ -9,6 +9,88 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
     public sealed class SimultriaViewerDevelopmentWindowTests
     {
         [Test]
+        public void WindowUsesCompactMinimumSize()
+        {
+            Assert.That(
+                SimultriaViewerDevelopmentWindow.CompactMinimumSize,
+                Is.EqualTo(new UnityEngine.Vector2(420f, 340f)));
+        }
+
+        [Test]
+        public void ReadinessStopsAtMissingContext()
+        {
+            SimultriaViewerDevelopmentWindow.DevelopmentReadiness readiness =
+                SimultriaViewerDevelopmentWindow.BuildReadiness(
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    "Choose the project context.");
+
+            Assert.That(
+                readiness.Level,
+                Is.EqualTo(
+                    SimultriaViewerDevelopmentWindow
+                        .DevelopmentReadinessLevel.NeedsAction));
+            Assert.That(readiness.Message, Is.EqualTo("Choose the project context."));
+        }
+
+        [Test]
+        public void ReadinessRequestsAuthenticationAfterEnvironmentResolution()
+        {
+            SimultriaViewerDevelopmentWindow.DevelopmentReadiness readiness =
+                SimultriaViewerDevelopmentWindow.BuildReadiness(
+                    true,
+                    true,
+                    false,
+                    false,
+                    false);
+
+            Assert.That(
+                readiness.Level,
+                Is.EqualTo(
+                    SimultriaViewerDevelopmentWindow
+                        .DevelopmentReadinessLevel.NeedsAction));
+            Assert.That(
+                readiness.Message,
+                Is.EqualTo("Sign in with Viewer Authentication."));
+        }
+
+        [Test]
+        public void ReadinessWaitsForRouteOnlyDuringPlayMode()
+        {
+            SimultriaViewerDevelopmentWindow.DevelopmentReadiness editMode =
+                SimultriaViewerDevelopmentWindow.BuildReadiness(
+                    true,
+                    true,
+                    true,
+                    false,
+                    false);
+            SimultriaViewerDevelopmentWindow.DevelopmentReadiness playMode =
+                SimultriaViewerDevelopmentWindow.BuildReadiness(
+                    true,
+                    true,
+                    true,
+                    true,
+                    false);
+
+            Assert.That(
+                editMode.Level,
+                Is.EqualTo(
+                    SimultriaViewerDevelopmentWindow
+                        .DevelopmentReadinessLevel.Ready));
+            Assert.That(
+                playMode.Level,
+                Is.EqualTo(
+                    SimultriaViewerDevelopmentWindow
+                        .DevelopmentReadinessLevel.Waiting));
+            Assert.That(
+                playMode.Message,
+                Is.EqualTo("Waiting for the running viewer."));
+        }
+
+        [Test]
         public void BuildEnvironmentOptionsUsesCanonicalEnvironmentOrder()
         {
             ApiEnvironmentId emptyEnvironmentId = default;
