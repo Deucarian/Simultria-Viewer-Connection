@@ -1,6 +1,6 @@
 using Deucarian.API.Models;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     public enum SimultriaViewerRuntimeKind
     {

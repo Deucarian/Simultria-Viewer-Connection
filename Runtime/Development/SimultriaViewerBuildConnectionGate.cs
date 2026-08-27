@@ -2,10 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.Logging;
-using Deucarian.ViewerAuthentication;
+using Deucarian.Authentication;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>
     /// Holds viewer startup until one effective Simultria environment is
@@ -136,9 +136,9 @@ namespace Deucarian.SimultriaViewerConnection
             out string error)
         {
             provider = null;
-            if (!resolver.TryResolveConnectionProfileForCurrentRuntime(
+            if (!resolver.TryResolveConnectionSettingsForCurrentRuntime(
                     buildConfiguration,
-                    out Deucarian.API.Configuration.ApiConnectionProfile
+                    out Deucarian.API.Configuration.ApiConnectionSettings
                         connection,
                     out error))
             {

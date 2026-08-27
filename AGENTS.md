@@ -1,6 +1,6 @@
-# Deucarian Simultria Viewer Connection Agent Notes
+# Deucarian Simultria Viewer Integration Agent Notes
 
-Package ID: `com.deucarian.simultria-viewer-connection`
+Package ID: `com.deucarian.simultria-viewer-integration`
 
 Follow the canonical Package Registry architecture and dependency rules.
 

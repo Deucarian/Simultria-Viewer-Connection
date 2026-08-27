@@ -2,39 +2,26 @@ using System;
 using System.Threading;
 using Deucarian.API.Configuration;
 using Deucarian.Simultria.API.Configuration;
-using Deucarian.ViewerAuthentication;
-using Deucarian.ViewerAuthentication.Editor;
+using Deucarian.Authentication;
+using Deucarian.Authentication.Editor;
 using UnityEditor;
 using UnityEngine;
 
-namespace Deucarian.SimultriaViewerConnection.Editor
+namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     internal sealed class SimultriaViewerEditorAuthenticationConfiguration
     {
         internal SimultriaViewerEditorAuthenticationConfiguration(
-            ApiConnectionProfile connectionProfile,
+            ApiConnectionSettings settings,
             Deucarian.API.Models.ApiEnvironmentId environmentId)
         {
-            ConnectionProfile = connectionProfile;
+            Settings = settings;
             EnvironmentId = environmentId;
         }
 
-        internal SimultriaViewerEditorAuthenticationConfiguration(
-            SimultriaApiProfile apiProfile,
-            Deucarian.API.Models.ApiEnvironmentId environmentId)
-        {
-            ApiProfile = apiProfile;
-            EnvironmentId = environmentId;
-        }
+        internal ApiConnectionSettings Settings { get; }
 
-        internal ApiConnectionProfile ConnectionProfile { get; }
-
-        internal SimultriaApiProfile ApiProfile { get; }
-
-        internal ScriptableObject ProfileReference =>
-            ConnectionProfile != null
-                ? (ScriptableObject)ConnectionProfile
-                : ApiProfile;
+        internal ScriptableObject ProfileReference => Settings;
 
         internal Deucarian.API.Models.ApiEnvironmentId EnvironmentId { get; }
     }
@@ -50,10 +37,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private readonly Action<string, string> rebindRememberedTokenOwner;
         private readonly Func<
             SimultriaViewerEditorAuthenticationConfiguration,
-            ViewerAuthenticationSession,
+            AuthenticationSession,
             IDisposable> registerTarget;
         private IDisposable registration;
-        private ViewerAuthenticationSession session;
+        private AuthenticationSession session;
         private ScriptableObject attemptedProfile;
         private string attemptedEnvironmentId;
         private bool attemptRecorded;
@@ -66,7 +53,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             Action<string, string> rebindRememberedTokenOwner = null,
             Func<
                 SimultriaViewerEditorAuthenticationConfiguration,
-                ViewerAuthenticationSession,
+                AuthenticationSession,
                 IDisposable> registerTarget = null)
         {
             this.resolveConfiguration = resolveConfiguration ??
@@ -125,15 +112,15 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 }
 
                 Release(invalidate: false);
-                if (ViewerAuthenticationTargetRegistry.Targets.Count != 0)
+                if (AuthenticationTargetRegistry.Targets.Count != 0)
                 {
                     invalidated = true;
                     return;
                 }
 
-                ViewerAuthenticationSession candidate =
-                    ViewerAuthenticationSession.CreateTransient();
-                ViewerAuthenticationEditorSessionHandoff.TryApply(
+                AuthenticationSession candidate =
+                    AuthenticationSession.CreateTransient();
+                AuthenticationEditorSessionHandoff.TryApply(
                     SimultriaViewerEditorAuthenticationBinding.Create(
                         configuration),
                     candidate);
@@ -141,7 +128,6 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     registerTarget(configuration, candidate);
                 if (candidateRegistration == null)
                 {
-                    _ = candidate.ClearAsync(CancellationToken.None);
                     invalidated = true;
                     return;
                 }
@@ -173,7 +159,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return false;
             }
 
-            var targets = ViewerAuthenticationTargetRegistry.Targets;
+            var targets = AuthenticationTargetRegistry.Targets;
             for (int i = 0; i < targets.Count; i++)
             {
                 if (ReferenceEquals(targets[i].Session, session))
@@ -187,7 +173,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private bool HasForeignTarget()
         {
-            var targets = ViewerAuthenticationTargetRegistry.Targets;
+            var targets = AuthenticationTargetRegistry.Targets;
             for (int i = 0; i < targets.Count; i++)
             {
                 if (session == null ||
@@ -215,23 +201,10 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private static IDisposable RegisterTarget(
             SimultriaViewerEditorAuthenticationConfiguration configuration,
-            ViewerAuthenticationSession session)
+            AuthenticationSession session)
         {
-            if (configuration.ConnectionProfile != null)
-            {
-                return SimultriaViewerConnectionAuthentication.TryRegister(
-                        configuration.ConnectionProfile,
-                        configuration.EnvironmentId,
-                        session,
-                        out IDisposable connectionRegistration,
-                        out _,
-                        out _)
-                    ? connectionRegistration
-                    : null;
-            }
-
             return SimultriaViewerConnectionAuthentication.TryRegister(
-                    configuration.ApiProfile,
+                    configuration.Settings,
                     configuration.EnvironmentId,
                     session,
                     out IDisposable registration,
@@ -274,7 +247,6 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private void Release(bool invalidate)
         {
             IDisposable previousRegistration = registration;
-            ViewerAuthenticationSession previousSession = session;
             registration = null;
             session = null;
             if (invalidate)
@@ -283,10 +255,6 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             }
 
             previousRegistration?.Dispose();
-            if (previousSession != null)
-            {
-                _ = previousSession.ClearAsync(CancellationToken.None);
-            }
         }
     }
 
@@ -301,7 +269,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static bool shuttingDown;
         private static int testSuspensionCount;
         private static CancellationTokenSource environmentResolutionCancellation;
-        private static SimultriaViewerDevelopmentProfile environmentResolutionProfile;
+        private static SimultriaViewerDevelopmentContext environmentResolutionProfile;
         private static SimultriaViewerEnvironmentResolution environmentResolution;
         private static string environmentResolutionKey;
         private static bool environmentResolutionInFlight;
@@ -313,9 +281,9 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             Lease = new SimultriaViewerEditorAuthenticationLease(
                 ResolveConfiguration,
                 RebindRememberedTokenOwner);
-            ViewerAuthenticationTargetRegistry.RegistrationsChanged +=
+            AuthenticationTargetRegistry.RegistrationsChanged +=
                 OnRegistrationsChanged;
-            ViewerAuthenticationTargetRegistry.TargetsChanged +=
+            AuthenticationTargetRegistry.TargetsChanged +=
                 OnTargetsChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorApplication.projectChanged += OnProjectChanged;
@@ -354,8 +322,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         private static SimultriaViewerEditorAuthenticationConfiguration
             ResolveConfiguration()
         {
-            if (SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                    out SimultriaViewerDevelopmentProfile profile,
+            if (SimultriaViewerDevelopmentContextSelector.TryResolve(
+                    out SimultriaViewerDevelopmentContext profile,
                     out _,
                     out _))
             {
@@ -368,26 +336,12 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                     return null;
                 }
 
-                if (profile.ConnectionProfileReference != null)
-                {
-                    return new
-                        SimultriaViewerEditorAuthenticationConfiguration(
-                            profile.ConnectionProfileReference,
-                            environmentId);
-                }
-
                 return new SimultriaViewerEditorAuthenticationConfiguration(
-                    profile.EffectiveApiProfile,
+                    profile.ConnectionSettingsReference,
                     environmentId);
             }
 
-            SimultriaApiProfile defaultProfile =
-                SimultriaApiProfileDefaults.Load();
-            return defaultProfile == null
-                ? null
-                : new SimultriaViewerEditorAuthenticationConfiguration(
-                    defaultProfile,
-                    SimultriaEnvironmentIds.Development);
+            return null;
         }
 
         private static void OnRegistrationsChanged()
@@ -397,9 +351,9 @@ namespace Deucarian.SimultriaViewerConnection.Editor
 
         private static void OnTargetsChanged()
         {
-            if (!ViewerAuthenticationTargetRegistry.TryGet(
+            if (!AuthenticationTargetRegistry.TryGet(
                     SimultriaViewerConnectionAuthentication.DefaultTargetId,
-                    out ViewerAuthenticationTarget target))
+                    out AuthenticationTarget target))
             {
                 return;
             }
@@ -412,29 +366,19 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return;
             }
 
-            ViewerAuthenticationEditorSessionHandoff.Capture(
+            AuthenticationEditorSessionHandoff.Capture(
                 SimultriaViewerEditorAuthenticationBinding.Create(
                     configuration),
                 target.Session);
         }
 
         private static bool TryValidateTarget(
-            ViewerAuthenticationTarget target,
+            AuthenticationTarget target,
             SimultriaViewerEditorAuthenticationConfiguration configuration)
         {
-            if (configuration.ConnectionProfile != null)
-            {
-                return SimultriaViewerConnectionAuthentication
-                    .TryValidateTarget(
-                        target,
-                        configuration.ConnectionProfile,
-                        configuration.EnvironmentId,
-                        out _);
-            }
-
             return SimultriaViewerConnectionAuthentication.TryValidateTarget(
                 target,
-                configuration.ApiProfile,
+                configuration.Settings,
                 configuration.EnvironmentId,
                 out _);
         }
@@ -493,8 +437,8 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 return;
             }
 
-            if (SimultriaViewerDevelopmentProfileSelector.TryResolve(
-                    out SimultriaViewerDevelopmentProfile profile,
+            if (SimultriaViewerDevelopmentContextSelector.TryResolve(
+                    out SimultriaViewerDevelopmentContext profile,
                     out _,
                     out _) &&
                 profile.EnvironmentResolutionMode ==
@@ -515,7 +459,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         internal static bool TryGetEffectiveEnvironment(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             out Deucarian.API.Models.ApiEnvironmentId environmentId,
             out SimultriaViewerEnvironmentResolution resolution,
             out string message)
@@ -565,7 +509,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         private static void StartEnvironmentResolution(
-            SimultriaViewerDevelopmentProfile profile)
+            SimultriaViewerDevelopmentContext profile)
         {
             if (profile == null || environmentResolutionInFlight ||
                 testSuspensionCount > 0)
@@ -598,7 +542,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         private static async void ResolveEnvironmentAsync(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             string key,
             CancellationToken cancellationToken)
         {
@@ -651,7 +595,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
         }
 
         private static string BuildEnvironmentResolutionKey(
-            SimultriaViewerDevelopmentProfile profile)
+            SimultriaViewerDevelopmentContext profile)
         {
             if (profile == null)
             {
@@ -684,7 +628,7 @@ namespace Deucarian.SimultriaViewerConnection.Editor
             string expectedCurrentTargetId,
             string targetId)
         {
-            ViewerAuthenticationRememberedTokenFacade.TryRebindOwner(
+            AuthenticationRememberedTokenFacade.TryRebindOwner(
                 expectedCurrentTargetId,
                 targetId);
         }
@@ -703,9 +647,9 @@ namespace Deucarian.SimultriaViewerConnection.Editor
                 refreshScheduled = false;
             }
 
-            ViewerAuthenticationTargetRegistry.RegistrationsChanged -=
+            AuthenticationTargetRegistry.RegistrationsChanged -=
                 OnRegistrationsChanged;
-            ViewerAuthenticationTargetRegistry.TargetsChanged -=
+            AuthenticationTargetRegistry.TargetsChanged -=
                 OnTargetsChanged;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.projectChanged -= OnProjectChanged;

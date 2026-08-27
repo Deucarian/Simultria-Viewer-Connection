@@ -1,8 +1,8 @@
 using Deucarian.API.Core;
-using Deucarian.ViewerAuthentication;
+using Deucarian.Authentication;
 
 #if UNITY_EDITOR
-namespace Deucarian.SimultriaViewerConnection
+namespace Deucarian.SimultriaViewerIntegration
 {
     /// <summary>Sanitized aggregate status for editor and diagnostics presentation.</summary>
     public sealed class SimultriaViewerConnectionStatus
@@ -10,7 +10,7 @@ namespace Deucarian.SimultriaViewerConnection
         internal SimultriaViewerConnectionStatus(
             ApiEnvironmentStatus environment,
             string environmentMessage,
-            ViewerAuthenticationStatusSnapshot authentication)
+            AuthenticationStatusSnapshot authentication)
         {
             Environment = environment;
             EnvironmentMessage = environmentMessage;
@@ -19,10 +19,10 @@ namespace Deucarian.SimultriaViewerConnection
 
         public ApiEnvironmentStatus Environment { get; }
         public string EnvironmentMessage { get; }
-        public ViewerAuthenticationStatusSnapshot Authentication { get; }
+        public AuthenticationStatusSnapshot Authentication { get; }
 
         public static SimultriaViewerConnectionStatus Capture(
-            SimultriaViewerDevelopmentProfile profile)
+            SimultriaViewerDevelopmentContext profile)
         {
             if (profile?.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode
@@ -45,21 +45,21 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         public static SimultriaViewerConnectionStatus Capture(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             Deucarian.API.Models.ApiEnvironmentId effectiveEnvironmentId)
         {
             ApiEnvironmentStatus environment = null;
             string environmentMessage =
-                "No Simultria viewer development profile is selected.";
+                "No Simultria viewer development context is selected.";
             profile?.TryResolveEnvironment(
                 effectiveEnvironmentId,
                 out environment,
                 out environmentMessage);
-            ViewerAuthenticationStatusSnapshot authentication = null;
+            AuthenticationStatusSnapshot authentication = null;
             if (TryResolveAuthenticationTarget(
                     profile,
                     effectiveEnvironmentId,
-                    out ViewerAuthenticationTarget authenticationTarget,
+                    out AuthenticationTarget authenticationTarget,
                     out _))
             {
                 authentication = authenticationTarget.Session.Status;
@@ -72,7 +72,7 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         public static bool TryResolveAuthenticationTarget(
-            out ViewerAuthenticationTarget target)
+            out AuthenticationTarget target)
         {
             return TryResolveAuthenticationTarget(
                 null,
@@ -81,8 +81,8 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         internal static bool TryResolveAuthenticationTarget(
-            SimultriaViewerDevelopmentProfile profile,
-            out ViewerAuthenticationTarget target,
+            SimultriaViewerDevelopmentContext profile,
+            out AuthenticationTarget target,
             out string error)
         {
             if (profile?.EnvironmentResolutionMode ==
@@ -105,12 +105,12 @@ namespace Deucarian.SimultriaViewerConnection
         }
 
         internal static bool TryResolveAuthenticationTarget(
-            SimultriaViewerDevelopmentProfile profile,
+            SimultriaViewerDevelopmentContext profile,
             Deucarian.API.Models.ApiEnvironmentId effectiveEnvironmentId,
-            out ViewerAuthenticationTarget target,
+            out AuthenticationTarget target,
             out string error)
         {
-            var targets = ViewerAuthenticationTargetRegistry.Targets;
+            var targets = AuthenticationTargetRegistry.Targets;
             if (targets.Count != 1)
             {
                 target = null;
