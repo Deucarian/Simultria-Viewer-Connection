@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.simultria-viewer-integration",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Deucarian Simultria Viewer Integration",
   "description": "Viewer-specific Simultria adapter wiring and credential-free development context.",
   "unity": "6000.0",
@@ -20,13 +20,13 @@
     "development"
   ],
   "dependencies": {
-    "com.deucarian.api": "2.0.0",
-    "com.deucarian.command-routing": "0.2.4",
-    "com.deucarian.editor": "1.1.0",
-    "com.deucarian.logging": "1.0.3",
+    "com.deucarian.api": "2.0.1",
+    "com.deucarian.command-routing": "0.2.5",
+    "com.deucarian.editor": "1.2.0",
+    "com.deucarian.logging": "1.0.4",
     "com.deucarian.session": "1.0.6",
-    "com.deucarian.simultria-api": "1.0.0",
-    "com.deucarian.authentication": "1.0.0",
+    "com.deucarian.simultria-api": "1.0.2",
+    "com.deucarian.authentication": "1.0.1",
     "com.unity.nuget.newtonsoft-json": "3.2.2"
   }
 }

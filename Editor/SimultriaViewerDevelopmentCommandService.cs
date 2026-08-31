@@ -13,7 +13,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
     internal static class SimultriaViewerDevelopmentCommandService
     {
         internal const string AuthenticationRequiredMessage =
-            "Waiting for authentication. Open Tools/Deucarian/Authentication.";
+            "Waiting for authentication. Open Deucarian Control Center > " +
+            "Connections > Authentication.";
 
         public static bool TryCreateCommand(
             SimultriaViewerDevelopmentContext profile,

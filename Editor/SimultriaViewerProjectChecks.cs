@@ -148,7 +148,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
         private static void OpenAuthentication()
         {
-            AuthenticationWindow.Open();
+            AuthenticationEditorWindow.Open();
         }
     }
 }
