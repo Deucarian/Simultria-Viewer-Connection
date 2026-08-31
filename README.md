@@ -23,8 +23,8 @@ Install the stable package branch in a Simultria-backed viewer:
 "com.deucarian.simultria-viewer-integration": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
 ```
 
-Required package versions are declared in `package.json`, including API 2.0.0,
-Simultria API 1.0.0, Command Routing 0.1.2, and Viewer Authentication 0.5.1.
+Required package versions are declared in `package.json`, including API 2.0.1,
+Simultria API 1.0.2, Command Routing 0.2.5, Authentication 1.0.1, and Logging 1.0.4.
 
 ## Player build configuration
 
@@ -97,7 +97,7 @@ Then enter each environment host in that asset's inspector. The Simultria
 factory supplies the four blank slots and API v2 catalog; it supplies no
 deployment URL and never copies one into the development context.
 
-Open `Tools > Deucarian > Simultria Viewer Development` to select one project
+Open **Deucarian Control Center > Connections > Simultria Viewer Development** to select one project
 default. That selection is stored in:
 
 `ProjectSettings/DeucarianSimultriaViewerConnection.asset`
@@ -125,7 +125,7 @@ selected development context overrides its API composition and environment;
 automatic contexts register only after their portal result has resolved. When
 none is selected, no authentication target is registered. Project and model IDs are never required
 merely to sign in or refresh authentication. This makes the shared
-`Tools > Deucarian > Viewer > Authentication` window usable outside Play Mode
+**Deucarian Control Center > Connections > Authentication** workflow usable outside Play Mode
 without any product-local login or validation endpoint assets.
 
 The target uses the stable ID
