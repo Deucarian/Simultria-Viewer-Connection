@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2] - 2026-08-31
+
+- Registered the package workflow and a bounded, sanitized local-state card with Deucarian Control Center.
+- Removed normal `Tools/Deucarian` menu exposure while preserving the standalone open API.
+- Updated the shared Editor dependency to 1.2.0.
+- Aligned API 2.0.1, Command Routing 0.2.5, Logging 1.0.4, Simultria API 1.0.2, and Authentication 1.0.1.
+
 ## [1.0.1] - 2026-08-27
 
 ### Changed
