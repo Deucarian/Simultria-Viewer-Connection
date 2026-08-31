@@ -2,6 +2,7 @@
   "name": "Deucarian.SimultriaViewerIntegration.Tests",
   "rootNamespace": "Deucarian.SimultriaViewerIntegration.Tests",
   "references": [
+    "Deucarian.Editor",
     "Deucarian.API",
     "Deucarian.CommandRouting",
     "Deucarian.Session",
