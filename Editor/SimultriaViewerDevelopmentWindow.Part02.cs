@@ -186,7 +186,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 : current;
             var optionLabels = new List<string>();
             var optionValues = new List<ApiEnvironmentId>();
-            foreach (var descriptor in SimultriaEnvironmentDescriptors.Standard)
+            foreach (var descriptor in SimultriaEnvironmentDescriptors.All)
             {
                 ApiEnvironmentId environmentId = descriptor.EnvironmentId;
                 if (environmentId.IsEmpty)

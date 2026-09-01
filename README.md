@@ -24,7 +24,7 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 2.0.1,
-Simultria API 1.0.2, Command Routing 0.2.5, Authentication 1.0.1, and Logging 1.0.4.
+Simultria API 1.0.3, Command Routing 0.2.5, Authentication 1.0.1, and Logging 1.0.4.
 
 ## Player build configuration
 
@@ -73,7 +73,10 @@ metadata keys are rejected recursively.
 
 Editor Manual mode preserves the existing behavior: an empty environment ID means
 Development, while an explicitly authored custom ID remains intact and is
-accepted when the connection settings configure it.
+accepted when the connection settings configure it. Local is a first-class
+built-in selection with the stable `simultria.local` ID; it is displayed as
+**Local**, never as a custom environment, and may remain intentionally
+unconfigured until a developer supplies a host in project-owned settings.
 
 Editor Automatic mode uses `Application.version` unless the profile supplies an
 explicit local override. Player builds always use `Application.version` from
@@ -94,7 +97,8 @@ Create the referenced connection from:
 `Assets > Create > Deucarian > Simultria > API Profile`
 
 Then enter each environment host in that asset's inspector. The Simultria
-factory supplies the four blank slots and API v2 catalog; it supplies no
+factory supplies five blank Local, Development, Testing, Acceptance, and
+Production slots plus the API v2 catalog; it supplies no
 deployment URL and never copies one into the development context.
 
 Open **Deucarian Control Center > Connections > Simultria Viewer Development** to select one project
