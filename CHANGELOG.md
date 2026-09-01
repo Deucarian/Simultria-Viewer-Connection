@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.3] - 2026-09-01
+
+### Fixed
+
+- Made Local (`simultria.local`) a first-class built-in choice in both manual
+  context and build-directory environment selectors, labelled exactly `Local`.
+- Preserved Development as the fallback for legacy empty values and preserved
+  genuinely unknown IDs as `Custom (...)` options.
+
+### Changed
+
+- Updated Simultria API to 1.0.3 for the canonical Local descriptor and
+  five-environment presentation order.
+
 ## [1.0.2] - 2026-08-31
 
 - Registered the package workflow and a bounded, sanitized local-state card with Deucarian Control Center.

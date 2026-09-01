@@ -103,28 +103,48 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
 
             ApiEnvironmentId[] expectedEnvironmentIds =
             {
+                SimultriaEnvironmentIds.Local,
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing,
                 SimultriaEnvironmentIds.Acceptance,
                 SimultriaEnvironmentIds.Production
             };
             string[] expectedEnvironmentLabels =
-                SimultriaEnvironmentDescriptors.Standard
+                SimultriaEnvironmentDescriptors.All
                     .Select(descriptor => descriptor.DisplayName)
                     .ToArray();
 
             Assert.That(options, Is.Not.Null);
             Assert.That(values, Is.Not.Null);
             Assert.That(
-                SimultriaEnvironmentDescriptors.Standard
+                SimultriaEnvironmentDescriptors.All
                     .Select(descriptor => descriptor.EnvironmentId)
                     .ToArray(),
                 Is.EqualTo(expectedEnvironmentIds));
             Assert.That(options, Is.EqualTo(expectedEnvironmentLabels));
             Assert.That(values, Is.EqualTo(expectedEnvironmentIds));
-            Assert.That(selectedIndex, Is.EqualTo(0));
-            Assert.That(values[0], Is.EqualTo(SimultriaEnvironmentIds.Development));
-            Assert.That(options, Has.Length.EqualTo(4));
+            Assert.That(selectedIndex, Is.EqualTo(1));
+            Assert.That(
+                values[selectedIndex],
+                Is.EqualTo(SimultriaEnvironmentIds.Development));
+            Assert.That(options, Has.Length.EqualTo(5));
+            Assert.That(options[0], Is.EqualTo("Local"));
+            Assert.That(values[0], Is.EqualTo(SimultriaEnvironmentIds.Local));
+        }
+
+        [Test]
+        public void BuildEnvironmentOptionsKeepsEmptyLegacyValueOnDevelopment()
+        {
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                default(ApiEnvironmentId),
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int selectedIndex);
+
+            Assert.That(options[selectedIndex], Is.EqualTo("Development"));
+            Assert.That(
+                values[selectedIndex],
+                Is.EqualTo(SimultriaEnvironmentIds.Development));
         }
 
         [Test]
@@ -140,6 +160,37 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(values[selectedIndex], Is.EqualTo(SimultriaEnvironmentIds.Testing));
             Assert.That(SimultriaEnvironmentIds.Testing.Value, Is.EqualTo("simultria.testing"));
             Assert.That(values[selectedIndex].Value, Is.EqualTo("simultria.testing"));
+        }
+
+        [Test]
+        public void BuildEnvironmentOptionsTreatsLocalAsBuiltInAfterRoundTrip()
+        {
+            ApiEnvironmentId current = SimultriaEnvironmentIds.Local;
+            AssertBuiltInEnvironmentSelection(
+                current,
+                "Local");
+
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                current,
+                out _,
+                out ApiEnvironmentId[] localValues,
+                out _);
+            current = localValues.Single(
+                value => value.Equals(SimultriaEnvironmentIds.Development));
+            AssertBuiltInEnvironmentSelection(
+                current,
+                "Development");
+
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                current,
+                out _,
+                out ApiEnvironmentId[] developmentValues,
+                out _);
+            current = developmentValues.Single(
+                value => value.Equals(SimultriaEnvironmentIds.Local));
+            AssertBuiltInEnvironmentSelection(
+                current,
+                "Local");
         }
 
         [Test]
@@ -176,9 +227,59 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(
                 values.Skip(1).ToArray(),
                 Is.EqualTo(
-                    SimultriaEnvironmentDescriptors.Standard
+                    SimultriaEnvironmentDescriptors.All
                         .Select(descriptor => descriptor.EnvironmentId)
                         .ToArray()));
+        }
+
+        [Test]
+        public void BuildDirectoryOptionsSelectLocalAsBuiltIn()
+        {
+            SimultriaViewerDevelopmentWindow.BuildDirectoryEnvironmentOptions(
+                SimultriaEnvironmentIds.Local,
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int selectedIndex);
+
+            Assert.That(selectedIndex, Is.EqualTo(1));
+            Assert.That(options[selectedIndex], Is.EqualTo("Local"));
+            Assert.That(
+                values[selectedIndex],
+                Is.EqualTo(SimultriaEnvironmentIds.Local));
+            Assert.That(options[selectedIndex], Does.Not.StartWith("Custom"));
+        }
+
+        [Test]
+        public void BuildDirectoryOptionsPreserveUnknownCustomId()
+        {
+            var custom = new ApiEnvironmentId("simultria.private-preview");
+
+            SimultriaViewerDevelopmentWindow.BuildDirectoryEnvironmentOptions(
+                custom,
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int selectedIndex);
+
+            Assert.That(
+                options[selectedIndex],
+                Is.EqualTo($"Custom ({custom.Value})"));
+            Assert.That(values[selectedIndex], Is.EqualTo(custom));
+        }
+
+        private static void AssertBuiltInEnvironmentSelection(
+            ApiEnvironmentId environmentId,
+            string expectedLabel)
+        {
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                environmentId,
+                out string[] options,
+                out ApiEnvironmentId[] values,
+                out int selectedIndex);
+
+            Assert.That(selectedIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(options[selectedIndex], Is.EqualTo(expectedLabel));
+            Assert.That(values[selectedIndex], Is.EqualTo(environmentId));
+            Assert.That(options[selectedIndex], Does.Not.StartWith("Custom"));
         }
     }
 }
