@@ -101,21 +101,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     openSetup: OpenApiConnections));
             }
 
-            if (context.EnvironmentId.IsEmpty)
-            {
-                issues.Add(new DeucarianProjectIssue(
-                    "DEU-API-003",
-                    DeucarianProjectIssueSeverity.Error,
-                    Id,
-                    "Select an explicit environment; blank never means " +
-                    "Development.",
-                    AssetDatabase.GetAssetPath(context),
-                    select: selectContext,
-                    openSetup: SimultriaViewerDevelopmentWindow.Open));
-            }
-            else if (context.EnvironmentResolutionMode ==
-                     SimultriaViewerEnvironmentResolutionMode.Manual &&
-                     !context.TryResolveEnvironment(out _, out string error))
+            if (TryGetManualEnvironmentError(context, out string error))
             {
                 issues.Add(new DeucarianProjectIssue(
                     "DEU-API-003",
@@ -139,6 +125,17 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     select: selectContext,
                     openSetup: SimultriaViewerDevelopmentWindow.Open));
             }
+        }
+
+        internal static bool TryGetManualEnvironmentError(
+            SimultriaViewerDevelopmentContext context,
+            out string error)
+        {
+            error = null;
+            return context != null &&
+                   context.EnvironmentResolutionMode ==
+                   SimultriaViewerEnvironmentResolutionMode.Manual &&
+                   !context.TryResolveEnvironment(out _, out error);
         }
 
         private static void OpenApiConnections()

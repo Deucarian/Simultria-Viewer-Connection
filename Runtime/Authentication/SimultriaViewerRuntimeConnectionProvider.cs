@@ -1,5 +1,5 @@
 using System;
-using System.Threading;
+using System.Collections.Generic;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
@@ -9,6 +9,113 @@ using UnityEngine;
 
 namespace Deucarian.SimultriaViewerIntegration
 {
+    internal static class SimultriaViewerRuntimeConnectionProviderFactory
+    {
+        private static Func<ApiConnectionSettings, ApiEnvironmentId,
+            SimultriaViewerInitialSession> initialSessionFactory;
+
+        internal static SimultriaViewerRuntimeConnectionProvider Create(
+            ApiConnectionSettings settings,
+            ApiEnvironmentId environmentId)
+        {
+            SimultriaViewerInitialSession initialSession = null;
+            try
+            {
+                initialSession = initialSessionFactory?.Invoke(
+                    settings,
+                    environmentId);
+            }
+            catch (Exception)
+            {
+                initialSession = null;
+            }
+
+            return new SimultriaViewerRuntimeConnectionProvider(
+                settings,
+                environmentId,
+                initialSession?.Session,
+                initialSession?.CompositionFingerprint);
+        }
+
+        internal static void ConfigureInitialSessionFactory(
+            Func<ApiConnectionSettings, ApiEnvironmentId,
+                SimultriaViewerInitialSession> factory)
+        {
+            initialSessionFactory = factory;
+        }
+
+        internal static IDisposable OverrideInitialSessionFactoryForTests(
+            Func<ApiConnectionSettings, ApiEnvironmentId,
+                SimultriaViewerInitialSession> factory)
+        {
+            Func<ApiConnectionSettings, ApiEnvironmentId,
+                SimultriaViewerInitialSession> previous =
+                initialSessionFactory;
+            initialSessionFactory = factory;
+            return new InitialSessionFactoryScope(previous);
+        }
+
+        private sealed class InitialSessionFactoryScope : IDisposable
+        {
+            private Func<ApiConnectionSettings, ApiEnvironmentId,
+                SimultriaViewerInitialSession> previous;
+
+            internal InitialSessionFactoryScope(
+                Func<ApiConnectionSettings, ApiEnvironmentId,
+                    SimultriaViewerInitialSession> previousFactory)
+            {
+                previous = previousFactory;
+            }
+
+            public void Dispose()
+            {
+                initialSessionFactory = previous;
+                previous = null;
+            }
+        }
+    }
+
+    internal sealed class SimultriaViewerInitialSession
+    {
+        private SimultriaViewerInitialSession(
+            AuthenticationSession session,
+            string compositionFingerprint)
+        {
+            Session = session;
+            CompositionFingerprint = compositionFingerprint;
+        }
+
+        internal AuthenticationSession Session { get; }
+
+        internal string CompositionFingerprint { get; }
+
+        internal static SimultriaViewerInitialSession Capture(
+            ApiConnectionSettings settings,
+            ApiEnvironmentId environmentId,
+            AuthenticationSession session)
+        {
+            return session != null &&
+                   SimultriaViewerConnectionCompositionFingerprint.TryCreate(
+                       settings,
+                       environmentId,
+                       out string fingerprint)
+                ? new SimultriaViewerInitialSession(session, fingerprint)
+                : null;
+        }
+
+        internal static SimultriaViewerInitialSession Create(
+            AuthenticationSession session,
+            string compositionFingerprint)
+        {
+            return session == null ||
+                   string.IsNullOrWhiteSpace(compositionFingerprint)
+                ? null
+                : new SimultriaViewerInitialSession(
+                    session,
+                    compositionFingerprint.Trim());
+        }
+    }
+
     /// <summary>
     /// Supplies the optional generic viewer runtime with one Simultria-backed
     /// authentication session and its matching API composition.
@@ -22,6 +129,7 @@ namespace Deucarian.SimultriaViewerIntegration
         private readonly ApiConnectionSettings connectionSettings;
         private readonly ApiEnvironmentId environmentId;
         private AuthenticationSession initialSession;
+        private string initialSessionFingerprint;
         private bool leased;
 
         /// <summary>
@@ -38,10 +146,27 @@ namespace Deucarian.SimultriaViewerIntegration
             ApiConnectionSettings profile,
             ApiEnvironmentId environment,
             AuthenticationSession session)
+            : this(
+                profile,
+                environment,
+                session,
+                SimultriaViewerInitialSession.Capture(
+                    profile,
+                    environment,
+                    session)?.CompositionFingerprint)
+        {
+        }
+
+        internal SimultriaViewerRuntimeConnectionProvider(
+            ApiConnectionSettings profile,
+            ApiEnvironmentId environment,
+            AuthenticationSession session,
+            string compositionFingerprint)
         {
             connectionSettings = profile;
             environmentId = environment;
             initialSession = session;
+            initialSessionFingerprint = compositionFingerprint ?? string.Empty;
         }
 
         public string Id => ProviderId;
@@ -65,7 +190,6 @@ namespace Deucarian.SimultriaViewerIntegration
             }
 
             AuthenticationSession session = initialSession;
-            initialSession = null;
             IDisposable targetRegistration = null;
             SimultriaViewerRuntimeConnectionLifetime lifetime = null;
             try
@@ -73,6 +197,11 @@ namespace Deucarian.SimultriaViewerIntegration
                 if (!TryCreateComposition(
                         out ApiComposition composition,
                         out error) ||
+                    !SimultriaViewerConnectionCompositionFingerprint.TryCreate(
+                        connectionSettings,
+                        composition,
+                        environmentId,
+                        out string compositionFingerprint) ||
                     !composition.TryResolveClient(
                         environmentId,
                         SimultriaClientIds.Primary,
@@ -83,6 +212,19 @@ namespace Deucarian.SimultriaViewerIntegration
                     return false;
                 }
 
+                if (session != null && !string.Equals(
+                        initialSessionFingerprint,
+                        compositionFingerprint,
+                        StringComparison.Ordinal))
+                {
+                    DiscardInitialSession(session);
+                    session = null;
+                }
+
+                IReadOnlyCollection<string> authenticatedOrigins =
+                    SimultriaViewerAuthenticatedOriginResolver.Resolve(
+                        composition,
+                        environmentId);
                 session = session ?? AuthenticationSession.CreateTransient();
 
                 IApiClient apiClient =
@@ -91,6 +233,7 @@ namespace Deucarian.SimultriaViewerIntegration
                             session,
                             resolvedClient.BaseUrl);
                 if (!TryRegister(
+                        composition,
                         session,
                         apiClient,
                         out targetRegistration,
@@ -100,21 +243,43 @@ namespace Deucarian.SimultriaViewerIntegration
                     return false;
                 }
 
+                if (!SimultriaViewerConnectionCompositionFingerprint.TryCreate(
+                        connectionSettings,
+                        environmentId,
+                        out string currentFingerprint) ||
+                    !string.Equals(
+                        compositionFingerprint,
+                        currentFingerprint,
+                        StringComparison.Ordinal))
+                {
+                    targetRegistration.Dispose();
+                    targetRegistration = null;
+                    DiscardInitialSession(session);
+                    ReleaseLease();
+                    error = "The Simultria API configuration changed while " +
+                            "the runtime connection was being created.";
+                    return false;
+                }
+
                 lifetime = new SimultriaViewerRuntimeConnectionLifetime(
                     targetRegistration,
                     session,
                     ReleaseLease);
                 targetRegistration = null;
-                session = null;
                 connection = new ViewerRuntimeConnection(
                     SimultriaViewerConnectionAuthentication.DefaultTargetId,
                     lifetime.Session,
                     apiClient,
                     resolvedClient.BaseUrl,
-                    SimultriaViewerAuthenticatedOriginResolver.Resolve(
-                        composition,
-                        environmentId),
+                    authenticatedOrigins,
                     lifetime);
+                if (ReferenceEquals(initialSession, session))
+                {
+                    initialSession = null;
+                    initialSessionFingerprint = string.Empty;
+                }
+
+                session = null;
                 error = null;
                 return true;
             }
@@ -152,6 +317,7 @@ namespace Deucarian.SimultriaViewerIntegration
         }
 
         private bool TryRegister(
+            ApiComposition composition,
             IAuthenticationSession session,
             IApiClient apiClient,
             out IDisposable registration,
@@ -159,7 +325,10 @@ namespace Deucarian.SimultriaViewerIntegration
         {
             return SimultriaViewerConnectionAuthentication.TryRegister(
                 connectionSettings,
+                composition,
                 environmentId,
+                SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                SimultriaViewerConnectionAuthentication.DefaultDisplayName,
                 session,
                 out registration,
                 out _,
@@ -167,6 +336,16 @@ namespace Deucarian.SimultriaViewerIntegration
                 apiClient);
         }
 
+        private void DiscardInitialSession(AuthenticationSession session)
+        {
+            if (!ReferenceEquals(initialSession, session))
+            {
+                return;
+            }
+
+            initialSession = null;
+            initialSessionFingerprint = string.Empty;
+        }
     }
 
     internal sealed class SimultriaViewerRuntimeConnectionLifetime :
