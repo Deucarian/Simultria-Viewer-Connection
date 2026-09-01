@@ -105,6 +105,59 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         }
 
         [Test]
+        public void GateOwnedProviderUsesThePackageEditorSessionSource()
+        {
+            ApiConnectionSettings settings = CreateSettings();
+            AuthenticationSession editorSession =
+                AuthenticationSession.CreateTransient();
+            ViewerRuntimeConnection connection = null;
+            bool sourceInvoked = false;
+            using (SimultriaViewerRuntimeConnectionProviderFactory
+                .OverrideInitialSessionFactoryForTests(
+                    (candidateSettings, candidateEnvironment) =>
+                    {
+                        sourceInvoked = true;
+                        Assert.That(candidateSettings, Is.SameAs(settings));
+                        Assert.That(
+                            candidateEnvironment,
+                            Is.EqualTo(SimultriaEnvironmentIds.Development));
+                        return SimultriaViewerInitialSession.Capture(
+                            candidateSettings,
+                            candidateEnvironment,
+                            editorSession);
+                    }))
+            {
+                IViewerRuntimeConnectionProvider provider =
+                    SimultriaViewerBuildConnectionGate.CreateProvider(
+                        settings,
+                        SimultriaEnvironmentIds.Development);
+
+                Assert.That(
+                    provider.TryCreate(out connection, out string error),
+                    Is.True,
+                    error);
+            }
+
+            try
+            {
+                Assert.That(sourceInvoked, Is.True);
+                Assert.That(connection, Is.Not.Null);
+                Assert.That(connection.Session, Is.SameAs(editorSession));
+                Assert.That(
+                    AuthenticationTargetRegistry.TryGet(
+                        SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                        out AuthenticationTarget target),
+                    Is.True);
+                Assert.That(target.Session, Is.SameAs(editorSession));
+            }
+            finally
+            {
+                connection?.Dispose();
+                _ = editorSession.ClearAsync(CancellationToken.None);
+            }
+        }
+
+        [Test]
         public async Task ConnectionFailureDoesNotClearAuthentication()
         {
             AuthenticationSession session =
@@ -119,6 +172,67 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
 
             Assert.That(created, Is.False);
             Assert.That(session.AccessToken, Is.EqualTo("preserved-token"));
+            await session.ClearAsync(CancellationToken.None);
+        }
+
+        [Test]
+        public async Task GateOwnedProviderRetainsInitialSessionForRetry()
+        {
+            ApiConnectionSettings settings = CreateSettings();
+            AuthenticationSession initialSession =
+                AuthenticationSession.CreateTransient();
+            AuthenticationSession conflictingSession =
+                AuthenticationSession.CreateTransient();
+            IDisposable conflictingRegistration = null;
+            ViewerRuntimeConnection connection = null;
+            await initialSession.ReplaceAccessTokenAsync("preserved-token");
+            IViewerRuntimeConnectionProvider provider;
+            using (SimultriaViewerRuntimeConnectionProviderFactory
+                .OverrideInitialSessionFactoryForTests(
+                    (candidateSettings, candidateEnvironment) =>
+                        SimultriaViewerInitialSession.Capture(
+                            candidateSettings,
+                            candidateEnvironment,
+                            initialSession)))
+            {
+                provider = SimultriaViewerBuildConnectionGate.CreateProvider(
+                    settings,
+                    SimultriaEnvironmentIds.Development);
+            }
+
+            try
+            {
+                conflictingRegistration = AuthenticationTargetRegistry.Register(
+                    SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                    "Conflicting viewer",
+                    conflictingSession);
+
+                Assert.That(
+                    provider.TryCreate(out _, out string firstError),
+                    Is.False);
+                Assert.That(firstError, Does.Contain("register"));
+                Assert.That(
+                    initialSession.AccessToken,
+                    Is.EqualTo("preserved-token"));
+
+                conflictingRegistration.Dispose();
+                conflictingRegistration = null;
+                Assert.That(
+                    provider.TryCreate(out connection, out string retryError),
+                    Is.True,
+                    retryError);
+                Assert.That(connection.Session, Is.SameAs(initialSession));
+                Assert.That(
+                    connection.Session.AccessToken,
+                    Is.EqualTo("preserved-token"));
+            }
+            finally
+            {
+                conflictingRegistration?.Dispose();
+                connection?.Dispose();
+                await initialSession.ClearAsync(CancellationToken.None);
+                await conflictingSession.ClearAsync(CancellationToken.None);
+            }
         }
 
         [Test]

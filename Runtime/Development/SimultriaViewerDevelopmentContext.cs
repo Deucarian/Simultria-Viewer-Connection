@@ -56,10 +56,17 @@ namespace Deucarian.SimultriaViewerIntegration
         [SerializeField] private bool forceShowLoadedModelObjects = true;
         [SerializeField, TextArea(3, 10)] private string metadataJson = string.Empty;
 
-        /// <summary>Explicit stable environment identifier.</summary>
+        /// <summary>
+        /// Explicit stable environment identifier. Legacy Manual assets that
+        /// serialized no value keep their historical Development behavior.
+        /// </summary>
         public ApiEnvironmentId EnvironmentId
         {
-            get => environmentId;
+            get => environmentResolutionMode ==
+                       SimultriaViewerEnvironmentResolutionMode.Manual &&
+                   environmentId.IsEmpty
+                ? SimultriaEnvironmentIds.Development
+                : environmentId;
             set => environmentId = value;
         }
 

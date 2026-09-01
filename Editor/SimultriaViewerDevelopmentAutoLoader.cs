@@ -6,7 +6,6 @@ using Deucarian.CommandRouting;
 using Deucarian.Logging;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.Authentication;
-using Deucarian.Authentication.Editor;
 using UnityEditor;
 
 namespace Deucarian.SimultriaViewerIntegration.Editor
@@ -383,15 +382,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 return false;
             }
 
-            AuthenticationEditorSessionHandoff.TryCreateSession(
-                SimultriaViewerEditorAuthenticationBinding.Create(
-                    settings,
-                    effectiveEnvironmentId),
-                out AuthenticationSession session);
-            provider = new SimultriaViewerRuntimeConnectionProvider(
+            provider = SimultriaViewerRuntimeConnectionProviderFactory.Create(
                 settings,
-                effectiveEnvironmentId,
-                session);
+                effectiveEnvironmentId);
             error = string.Empty;
             return true;
         }

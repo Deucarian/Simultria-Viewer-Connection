@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.API;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API.Authentication;
 using Deucarian.Simultria.API.Configuration;
 using Deucarian.Simultria.API.Models;
 using Deucarian.SimultriaViewerIntegration.Editor;
@@ -54,6 +56,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             SimultriaViewerRuntimeEnvironment.ResetForLifecycle();
         }
 
+        [TestCase("local")]
         [TestCase("development")]
         [TestCase("testing")]
         [TestCase("acceptance")]
@@ -62,6 +65,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             string backendEnvironment)
         {
             ApiConnectionSettings connection = CreateConnectionSettings(
+                SimultriaEnvironmentIds.Local,
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing,
                 SimultriaEnvironmentIds.Acceptance,
@@ -111,14 +115,16 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     "design_and_sales"));
         }
 
+        [TestCase("local")]
         [TestCase("development")]
         [TestCase("testing")]
         [TestCase("acceptance")]
         [TestCase("production")]
-        public async Task EditorManualOverrideSupportsStandardEnvironments(
+        public async Task EditorManualOverrideSupportsBuiltInEnvironments(
             string environment)
         {
             profile.ConnectionSettingsReference = CreateConnectionSettings(
+                SimultriaEnvironmentIds.Local,
                 SimultriaEnvironmentIds.Development,
                 SimultriaEnvironmentIds.Testing,
                 SimultriaEnvironmentIds.Acceptance,
@@ -192,21 +198,228 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         }
 
         [Test]
-        public async Task ManualModeRejectsEmptyEnvironmentWithoutFallback()
+        public async Task LegacyEmptyManualEnvironmentRunsAsDevelopmentEndToEnd()
         {
-            profile.EnvironmentId = default(ApiEnvironmentId);
             profile.EnvironmentResolutionMode =
                 SimultriaViewerEnvironmentResolutionMode.Manual;
+            FieldInfo serializedEnvironment =
+                typeof(SimultriaViewerDevelopmentContext).GetField(
+                    "environmentId",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(serializedEnvironment, Is.Not.Null);
+            serializedEnvironment.SetValue(profile, default(ApiEnvironmentId));
+            Assert.That(
+                ((ApiEnvironmentId)serializedEnvironment.GetValue(profile))
+                    .IsEmpty,
+                Is.True);
             var client = new BuildDirectoryClient();
             var resolver = CreateResolver(client, "unused");
 
             SimultriaViewerEnvironmentResolution result =
                 await resolver.ResolveAsync(profile);
+            AuthenticationSession session =
+                AuthenticationSession.CreateTransient();
+            IDisposable registration = null;
+            try
+            {
+                Assert.That(result.Succeeded, Is.True, result.Message);
+                Assert.That(
+                    result.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Development));
+                Assert.That(
+                    profile.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Development));
+                Assert.That(client.RequestCount, Is.Zero);
+                Assert.That(
+                    SimultriaViewerDevelopmentCommandService.TryCreateCommand(
+                        profile,
+                        out var command,
+                        out string commandError),
+                    Is.True,
+                    commandError);
+                Assert.That(
+                    command.TryReadPayload(
+                        out SimultriaViewerInitializationPayload payload,
+                        out string payloadError),
+                    Is.True,
+                    payloadError);
+                Assert.That(
+                    payload.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Development.Value));
+                Assert.That(
+                    SimultriaViewerConnectionAuthentication.TryRegister(
+                        profile,
+                        session,
+                        out registration,
+                        out ApiEnvironmentStatus status,
+                        out string registrationError),
+                    Is.True,
+                    registrationError);
+                Assert.That(
+                    status.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Development));
+                Assert.That(
+                    status.Stage,
+                    Is.EqualTo(ApiEnvironmentStage.Development));
+                Assert.That(
+                    AuthenticationTargetRegistry.TryGet(
+                        SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                        out AuthenticationTarget target),
+                    Is.True);
+                Assert.That(
+                    target.AcquisitionProvider,
+                    Is.TypeOf<SimultriaAuthenticationProvider>());
+                var provider =
+                    (SimultriaAuthenticationProvider)
+                    target.AcquisitionProvider;
+                Assert.That(
+                    provider.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Development));
+            }
+            finally
+            {
+                registration?.Dispose();
+                await session.ClearAsync(CancellationToken.None);
+            }
+        }
 
-            Assert.That(result.Succeeded, Is.False);
-            Assert.That(result.EnvironmentId.IsEmpty, Is.True);
-            Assert.That(result.Message, Does.Contain("not registered"));
-            Assert.That(client.RequestCount, Is.Zero);
+        [Test]
+        public async Task ConfiguredLocalRemainsLocalThroughEveryPackageBoundary()
+        {
+            const string localBaseUrl = "http://127.0.0.1:17777/api/v2";
+            const string developmentBaseUrl =
+                "https://development-only.invalid/api/v2";
+            ApiConnectionSettings settings = CreateConnectionSettings(
+                SimultriaEnvironmentIds.Local,
+                SimultriaEnvironmentIds.Development);
+            SetPrimaryBaseUrl(
+                settings,
+                SimultriaEnvironmentIds.Local,
+                localBaseUrl);
+            SetPrimaryBaseUrl(
+                settings,
+                SimultriaEnvironmentIds.Development,
+                developmentBaseUrl);
+            profile.ConnectionSettingsReference = settings;
+            profile.EnvironmentResolutionMode =
+                SimultriaViewerEnvironmentResolutionMode.Manual;
+            profile.EnvironmentId = SimultriaEnvironmentIds.Local;
+            var client = new BuildDirectoryClient();
+            var resolver = new SimultriaViewerEnvironmentResolver(
+                client,
+                new FixedBuildMetadataProvider("editor-local"),
+                new FixedRuntimeContext(true, "Local Viewer"));
+            AuthenticationSession session =
+                AuthenticationSession.CreateTransient();
+            IDisposable authenticationRegistration = null;
+            IDisposable providerRegistration = null;
+            ViewerRuntimeConnection runtimeConnection = null;
+            try
+            {
+                SimultriaViewerEnvironmentResolution resolution =
+                    await resolver.ResolveAsync(profile);
+                Assert.That(resolution.Succeeded, Is.True, resolution.Message);
+                Assert.That(
+                    resolution.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local));
+                Assert.That(
+                    resolution.EnvironmentId,
+                    Is.Not.EqualTo(SimultriaEnvironmentIds.Development));
+                Assert.That(client.RequestCount, Is.Zero);
+
+                Assert.That(
+                    profile.TryResolveEnvironment(
+                        out ApiEnvironmentStatus localStatus,
+                        out string statusError),
+                    Is.True,
+                    statusError);
+                Assert.That(
+                    localStatus.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local));
+                Assert.That(localStatus.DisplayName, Is.EqualTo("Local"));
+                Assert.That(
+                    localStatus.Stage,
+                    Is.EqualTo(ApiEnvironmentStage.Local));
+                Assert.That(
+                    localStatus.Stage,
+                    Is.Not.EqualTo(ApiEnvironmentStage.Custom));
+                Assert.That(
+                    localStatus.Availability,
+                    Is.EqualTo(ApiEnvironmentAvailability.Configured));
+
+                Assert.That(
+                    SimultriaViewerDevelopmentCommandService.TryCreateCommand(
+                        profile,
+                        out var command,
+                        out string commandError),
+                    Is.True,
+                    commandError);
+                Assert.That(
+                    command.TryReadPayload(
+                        out SimultriaViewerInitializationPayload payload,
+                        out string payloadError),
+                    Is.True,
+                    payloadError);
+                Assert.That(
+                    payload.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local.Value));
+                Assert.That(
+                    payload.EnvironmentId,
+                    Is.Not.EqualTo(SimultriaEnvironmentIds.Development.Value));
+
+                Assert.That(
+                    SimultriaViewerConnectionAuthentication.TryRegister(
+                        profile,
+                        session,
+                        out authenticationRegistration,
+                        out ApiEnvironmentStatus authenticationStatus,
+                        out string authenticationError),
+                    Is.True,
+                    authenticationError);
+                Assert.That(
+                    authenticationStatus.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local));
+                Assert.That(
+                    authenticationStatus.Stage,
+                    Is.EqualTo(ApiEnvironmentStage.Local));
+                AssertRegisteredAuthenticationEnvironment(
+                    SimultriaEnvironmentIds.Local);
+                authenticationRegistration.Dispose();
+                authenticationRegistration = null;
+
+                providerRegistration =
+                    ViewerRuntimeConnectionProviderRegistry.Register(
+                        new SimultriaViewerRuntimeConnectionProvider(
+                            settings,
+                            SimultriaEnvironmentIds.Local));
+                ViewerRuntimeConnectionResolution providerResolution =
+                    ViewerRuntimeConnectionProviderRegistry.Resolve();
+                Assert.That(
+                    providerResolution.Status,
+                    Is.EqualTo(
+                        ViewerRuntimeConnectionResolutionStatus.Resolved),
+                    providerResolution.Message);
+                runtimeConnection = providerResolution.Connection;
+                Assert.That(runtimeConnection, Is.Not.Null);
+                Assert.That(
+                    runtimeConnection.ApiBaseUrl,
+                    Is.EqualTo(localBaseUrl));
+                CollectionAssert.Contains(
+                    runtimeConnection.AuthenticatedOrigins,
+                    "http://127.0.0.1:17777");
+                CollectionAssert.DoesNotContain(
+                    runtimeConnection.AuthenticatedOrigins,
+                    "https://development-only.invalid");
+                AssertRegisteredAuthenticationEnvironment(
+                    SimultriaEnvironmentIds.Local);
+            }
+            finally
+            {
+                runtimeConnection?.Dispose();
+                providerRegistration?.Dispose();
+                authenticationRegistration?.Dispose();
+                await session.ClearAsync(CancellationToken.None);
+            }
         }
 
         [Test]
@@ -582,6 +795,49 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     definition));
         }
 
+        private static void SetPrimaryBaseUrl(
+            ApiConnectionSettings settings,
+            ApiEnvironmentId environmentId,
+            string baseUrl)
+        {
+            foreach (ApiEnvironmentProfile environment in settings.Environments)
+            {
+                if (environment.TryGetId(out ApiEnvironmentId candidate) &&
+                    candidate == environmentId)
+                {
+                    environment.Clients[0].BaseUrl = baseUrl;
+                    return;
+                }
+            }
+
+            Assert.Fail(
+                "Expected environment slot " + environmentId.Value + ".");
+        }
+
+        private static void AssertRegisteredAuthenticationEnvironment(
+            ApiEnvironmentId expectedEnvironmentId)
+        {
+            Assert.That(
+                AuthenticationTargetRegistry.TryGet(
+                    SimultriaViewerConnectionAuthentication.DefaultTargetId,
+                    out AuthenticationTarget target),
+                Is.True);
+            Assert.That(
+                target.AcquisitionProvider,
+                Is.TypeOf<SimultriaAuthenticationProvider>());
+            var provider =
+                (SimultriaAuthenticationProvider)target.AcquisitionProvider;
+            Assert.That(
+                provider.EnvironmentId,
+                Is.EqualTo(expectedEnvironmentId));
+            Assert.That(
+                provider.EnvironmentId,
+                Is.Not.EqualTo(SimultriaEnvironmentIds.Development));
+            Assert.That(
+                provider.EnvironmentStatus.Stage,
+                Is.EqualTo(ApiEnvironmentStage.Local));
+        }
+
         private T Own<T>(T instance) where T : UnityEngine.Object
         {
             ownedObjects.Add(instance);
@@ -592,6 +848,8 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         {
             switch (value)
             {
+                case "local":
+                    return SimultriaEnvironmentIds.Local;
                 case "development":
                     return SimultriaEnvironmentIds.Development;
                 case "testing":

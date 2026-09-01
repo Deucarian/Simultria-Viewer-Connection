@@ -1,3 +1,4 @@
+using Deucarian.API.Configuration;
 using Deucarian.API.Models;
 using UnityEditor;
 using UnityEngine;
@@ -20,7 +21,26 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ScriptableObject profile,
             ApiEnvironmentId environmentId)
         {
-            if (profile == null || environmentId.IsEmpty)
+            if (!(profile is ApiConnectionSettings settings) ||
+                environmentId.IsEmpty ||
+                !SimultriaViewerConnectionCompositionFingerprint.TryCreate(
+                    settings,
+                    environmentId,
+                    out string fingerprint))
+            {
+                return string.Empty;
+            }
+
+            return Create(profile, environmentId, fingerprint);
+        }
+
+        internal static string Create(
+            ScriptableObject profile,
+            ApiEnvironmentId environmentId,
+            string compositionFingerprint)
+        {
+            if (profile == null || environmentId.IsEmpty ||
+                string.IsNullOrWhiteSpace(compositionFingerprint))
             {
                 return string.Empty;
             }
@@ -31,7 +51,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 : AssetDatabase.AssetPathToGUID(assetPath);
             return string.IsNullOrWhiteSpace(assetGuid)
                 ? string.Empty
-                : assetGuid + "|" + environmentId.Value;
+                : assetGuid + "|" + environmentId.Value + "|sha256:" +
+                  compositionFingerprint.Trim();
         }
     }
 }
