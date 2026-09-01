@@ -15,7 +15,7 @@ namespace Deucarian.SimultriaViewerIntegration
     /// Composes one environment-specific Simultria provider into the generic
     /// Authentication registry without duplicating token/session logic.
     /// </summary>
-    public static class SimultriaViewerConnectionAuthentication
+    public static partial class SimultriaViewerConnectionAuthentication
     {
         private static readonly object BindingGate = new object();
         private static readonly Dictionary<
@@ -219,24 +219,13 @@ namespace Deucarian.SimultriaViewerIntegration
                 return false;
             }
 
-            return TryRegisterResolvedProfile(
+            return TryRegister(
                 connectionSettings,
                 composition,
                 environmentId,
                 targetId,
                 displayName,
                 session,
-                (IApiClient effectiveClient,
-                    out SimultriaAuthenticationProvider provider,
-                    out ApiEnvironmentStatus status,
-                    out string message) =>
-                    SimultriaAuthenticationProviderFactory.TryCreate(
-                        connectionSettings,
-                        environmentId,
-                        effectiveClient,
-                        out provider,
-                        out status,
-                        out message),
                 out registration,
                 out environmentStatus,
                 out error,
@@ -340,162 +329,6 @@ namespace Deucarian.SimultriaViewerIntegration
                     "The authenticated API client factory returned no client.");
         }
 
-#if UNITY_EDITOR
-        internal static bool TryValidateTarget(
-            AuthenticationTarget target,
-            ApiConnectionSettings expectedProfile,
-            ApiEnvironmentId expectedEnvironmentId,
-            out string error)
-        {
-            ApiComposition expectedComposition = null;
-            if (expectedProfile != null &&
-                !SimultriaApiConnectionSettingsAdapter.TryCreateComposition(
-                    expectedProfile,
-                    out expectedComposition,
-                    out error))
-            {
-                return false;
-            }
-
-            return TryValidateTarget(
-                target,
-                expectedProfile,
-                expectedComposition,
-                expectedEnvironmentId,
-                out error);
-        }
-
-        internal static bool TryValidateTarget(
-            AuthenticationTarget target,
-            SimultriaViewerDevelopmentContext expectedProfile,
-            ApiEnvironmentId expectedEnvironmentId,
-            out string error)
-        {
-            return TryValidateTarget(
-                target,
-                expectedProfile?.ConnectionSettingsReference,
-                expectedEnvironmentId,
-                out error);
-        }
-#endif
-
-        private static bool TryValidateTarget(
-            AuthenticationTarget target,
-            ScriptableObject expectedProfile,
-            ApiComposition expectedComposition,
-            ApiEnvironmentId expectedEnvironmentId,
-            out string error)
-        {
-            if (target == null ||
-                !string.Equals(
-                    target.Id,
-                    DefaultTargetId,
-                    StringComparison.Ordinal))
-            {
-                error =
-                    "The stable Simultria viewer authentication target is not registered.";
-                return false;
-            }
-
-            if (!(target.AcquisitionProvider is
-                    SimultriaAuthenticationProvider provider) ||
-                !(target.ValidationProvider is
-                    SimultriaAuthenticationProvider validator) ||
-                !ReferenceEquals(provider, validator))
-            {
-                error =
-                    "The stable viewer target is not backed by one authoritative Simultria authentication provider.";
-                return false;
-            }
-
-            AuthenticationBinding binding;
-            lock (BindingGate)
-            {
-                Bindings.TryGetValue(provider, out binding);
-            }
-
-            if (binding == null ||
-                !ReferenceEquals(binding.Composition, provider.Composition) ||
-                binding.EnvironmentId != provider.EnvironmentId)
-            {
-                error =
-                    "The Simultria authentication target has no trusted connection binding.";
-                return false;
-            }
-
-            if (expectedProfile == null)
-            {
-                error = null;
-                return true;
-            }
-
-            if (!ReferenceEquals(binding.Profile, expectedProfile) ||
-                binding.EnvironmentId != expectedEnvironmentId ||
-                provider.EnvironmentId != expectedEnvironmentId ||
-                !TryMatchCurrentComposition(
-                    provider,
-                    expectedComposition,
-                    expectedEnvironmentId))
-            {
-                error =
-                    "The registered Simultria authentication environment does not match the selected development context.";
-                return false;
-            }
-
-            error = null;
-            return true;
-        }
-
-        private static bool TryMatchCurrentComposition(
-            SimultriaAuthenticationProvider provider,
-            ApiComposition expectedComposition,
-            ApiEnvironmentId expectedEnvironmentId)
-        {
-            if (expectedComposition == null ||
-                expectedComposition.CatalogId != provider.Composition.CatalogId ||
-                !expectedComposition.TryResolveClient(
-                    expectedEnvironmentId,
-                    SimultriaClientIds.Primary,
-                    out ApiResolvedClient expectedClient,
-                    out _) ||
-                !provider.Composition.TryResolveClient(
-                    provider.EnvironmentId,
-                    SimultriaClientIds.Primary,
-                    out ApiResolvedClient providerClient,
-                    out _) ||
-                !string.Equals(
-                    expectedClient.BaseUrl,
-                    providerClient.BaseUrl,
-                    StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            try
-            {
-                ApiResolvedEndpoint expectedLogin =
-                    expectedComposition.ResolveEndpoint(
-                        expectedEnvironmentId,
-                        SimultriaEndpointIds.Login);
-                ApiResolvedEndpoint expectedValidation =
-                    expectedComposition.ResolveEndpoint(
-                        expectedEnvironmentId,
-                        SimultriaEndpointIds.ValidateAuthentication);
-                return string.Equals(
-                           expectedLogin.Endpoint.Path,
-                           provider.AcquisitionEndpoint,
-                           StringComparison.Ordinal) &&
-                       string.Equals(
-                           expectedValidation.Endpoint.Path,
-                           provider.ValidationEndpoint,
-                           StringComparison.Ordinal);
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
         private static IDisposable RegisterBoundTarget(
             string targetId,
             string displayName,
@@ -524,12 +357,23 @@ namespace Deucarian.SimultriaViewerIntegration
                     throw new InvalidOperationException(identityError);
                 }
 
+                if (string.IsNullOrWhiteSpace(
+                        binding.CompositionFingerprint))
+                {
+                    throw new InvalidOperationException(
+                        "The Simultria authentication target requires an " +
+                        "exact composition fingerprint.");
+                }
+
                 var persistenceIdentity =
                     new AuthenticationPersistenceIdentity(
                         SimultriaServiceIds.ApiV2.Value,
                         environmentId.Value,
                         client.BaseUrl,
-                        SimultriaClientIds.Primary.Value);
+                        SimultriaClientIds.Primary.Value,
+                        accountId: null,
+                        configurationFingerprint:
+                            binding.CompositionFingerprint);
                 IDisposable targetRegistration =
                     AuthenticationTargetRegistry.Register(
                         targetId,
@@ -568,11 +412,25 @@ namespace Deucarian.SimultriaViewerIntegration
                 Profile = profile;
                 EnvironmentId = environmentId;
                 Composition = composition;
+                if (profile is ApiConnectionSettings settings)
+                {
+                    SimultriaViewerConnectionCompositionFingerprint.TryCreate(
+                        settings,
+                        composition,
+                        environmentId,
+                        out string fingerprint);
+                    CompositionFingerprint = fingerprint ?? string.Empty;
+                }
+                else
+                {
+                    CompositionFingerprint = string.Empty;
+                }
             }
 
             internal ScriptableObject Profile { get; }
             internal ApiEnvironmentId EnvironmentId { get; }
             internal ApiComposition Composition { get; }
+            internal string CompositionFingerprint { get; }
         }
 
         private sealed class BoundRegistration : IDisposable
