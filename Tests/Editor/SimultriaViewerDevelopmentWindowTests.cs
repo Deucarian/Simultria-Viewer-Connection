@@ -166,6 +166,12 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         public void BuildEnvironmentOptionsTreatsLocalAsBuiltInAfterRoundTrip()
         {
             ApiEnvironmentId current = SimultriaEnvironmentIds.Local;
+            Assert.That(
+                SimultriaEnvironmentDescriptors.Local.Stage,
+                Is.EqualTo(ApiEnvironmentStage.Local));
+            Assert.That(
+                SimultriaEnvironmentDescriptors.Local.Stage,
+                Is.Not.EqualTo(ApiEnvironmentStage.Custom));
             AssertBuiltInEnvironmentSelection(
                 current,
                 "Local");

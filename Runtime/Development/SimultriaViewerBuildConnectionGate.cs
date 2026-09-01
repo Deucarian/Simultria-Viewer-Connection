@@ -145,11 +145,20 @@ namespace Deucarian.SimultriaViewerIntegration
                 return false;
             }
 
-            provider = new SimultriaViewerRuntimeConnectionProvider(
+            provider = CreateProvider(
                 connection,
                 resolution.EnvironmentId);
             error = string.Empty;
             return true;
+        }
+
+        internal static IViewerRuntimeConnectionProvider CreateProvider(
+            Deucarian.API.Configuration.ApiConnectionSettings connection,
+            Deucarian.API.Models.ApiEnvironmentId environmentId)
+        {
+            return SimultriaViewerRuntimeConnectionProviderFactory.Create(
+                connection,
+                environmentId);
         }
 
         private void SetStartupEnabled(bool value)

@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.0.4] - 2026-09-01
+
+### Fixed
+
+- Upgraded Local from the Custom/unknown lifecycle stage to the additive,
+  package-owned `ApiEnvironmentStage.Local` contract while retaining the
+  stable `simultria.local` ID and the visible `Local` label.
+- Kept an unconfigured Local host explicit and fail-closed; it never borrows
+  Development configuration.
+- Unified the Editor authentication-session handoff for both scene-gate and
+  fallback auto-loader startup so signed-in Play Mode uses one package-owned
+  session path.
+- Bound that handoff to a credential-free fingerprint of the exact resolved
+  client hosts and route catalog, so changing a settings asset's backend cannot
+  carry its previous bearer into the new composition.
+- Bound remembered Authentication persistence and runtime-provider creation to
+  the same fingerprint, including mutation checks around registration events.
+- Existing remembered Viewer sessions from pre-fingerprint package versions
+  intentionally require one new sign-in instead of crossing the migration.
+- Normalized legacy Manual contexts with an empty serialized environment to
+  Development consistently across the selector, resolver, command, and
+  authentication paths. Explicit Local remains Local and never falls back.
+
+### Changed
+
+- Updated Deucarian API to 2.0.2 and Simultria API to 1.0.4 for the complete
+  first-class Local environment contract.
+
 ## [1.0.3] - 2026-09-01
 
 ### Fixed

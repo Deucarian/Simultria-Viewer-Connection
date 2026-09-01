@@ -11,6 +11,7 @@
     "Deucarian.SimultriaViewerIntegration",
     "Deucarian.SimultriaViewerIntegration.Editor",
     "Deucarian.Authentication",
+    "Deucarian.Authentication.Editor",
     "Deucarian.Authentication.ViewerIntegration",
     "Newtonsoft.Json"
   ],

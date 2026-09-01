@@ -15,6 +15,11 @@ The package deliberately does not turn authentication into a Simultria feature:
 - This package owns only the connection, credential-free development context,
   and development-time handoff into a running viewer.
 
+In the Editor, the package installs one early session bridge used by both the
+scene connection gate and the fallback auto-loader. Signing in before Play Mode
+therefore hands the same transient session to target registration, API
+authentication, and model loading; no viewer project implements this handoff.
+
 ## Install
 
 Install the stable package branch in a Simultria-backed viewer:
@@ -23,8 +28,8 @@ Install the stable package branch in a Simultria-backed viewer:
 "com.deucarian.simultria-viewer-integration": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main"
 ```
 
-Required package versions are declared in `package.json`, including API 2.0.1,
-Simultria API 1.0.3, Command Routing 0.2.5, Authentication 1.0.1, and Logging 1.0.4.
+Required package versions are declared in `package.json`, including API 2.0.2,
+Simultria API 1.0.4, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
 
 ## Player build configuration
 
@@ -94,7 +99,7 @@ connection settings.
 
 Create the referenced connection from:
 
-`Assets > Create > Deucarian > Simultria > API Profile`
+`Assets > Create > Deucarian > Connections > Simultria Connection Settings`
 
 Then enter each environment host in that asset's inspector. The Simultria
 factory supplies five blank Local, Development, Testing, Acceptance, and
@@ -143,6 +148,15 @@ synchronously removed before Play Mode and as soon as any real viewer target
 is registered. It is restored only after the runtime target is gone and the
 editor has returned to Edit Mode, so the menu never receives an intentional
 editor/runtime target pair and the package never reads or copies the token.
+
+The transient handoff is bound to the selected settings asset, environment,
+and a SHA-256 fingerprint of its resolved client hosts and endpoint catalog.
+Changing a host or route on the same asset therefore creates a different
+binding and cannot restore the previous backend's bearer. The binding contains
+no raw host, route, header, or token value.
+Authentication persistence and runtime-provider creation use that same digest
+and recheck it around registration callbacks, so remembered or transient
+bearers cannot cross a host, route, secondary-client, or policy change.
 
 ## Canonical initialization command
 

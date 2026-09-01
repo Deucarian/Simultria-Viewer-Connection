@@ -53,16 +53,36 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 profile.ConnectionSettingsReference = connection;
                 var environment = new ApiEnvironmentId(
                     "simultria.development");
+                bool sessionSourceInvoked = false;
 
-                Assert.That(
-                    SimultriaViewerDevelopmentAutoLoader
-                        .TryCreateRuntimeConnectionProvider(
-                            profile,
-                            environment,
-                            out IViewerRuntimeConnectionProvider provider,
-                            out string error),
-                    Is.True,
-                    error);
+                IViewerRuntimeConnectionProvider provider;
+                string error;
+                using (SimultriaViewerRuntimeConnectionProviderFactory
+                    .OverrideInitialSessionFactoryForTests(
+                        (candidateSettings, candidateEnvironment) =>
+                        {
+                            sessionSourceInvoked = true;
+                            Assert.That(
+                                candidateSettings,
+                                Is.SameAs(connection));
+                            Assert.That(
+                                candidateEnvironment,
+                                Is.EqualTo(environment));
+                            return null;
+                        }))
+                {
+                    Assert.That(
+                        SimultriaViewerDevelopmentAutoLoader
+                            .TryCreateRuntimeConnectionProvider(
+                                profile,
+                                environment,
+                                out provider,
+                                out error),
+                        Is.True,
+                        error);
+                }
+
+                Assert.That(sessionSourceInvoked, Is.True);
                 Assert.That(
                     provider,
                     Is.TypeOf<SimultriaViewerRuntimeConnectionProvider>());

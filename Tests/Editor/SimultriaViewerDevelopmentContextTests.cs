@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Deucarian.API.Configuration;
+using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
 using NUnit.Framework;
@@ -70,18 +71,46 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         }
 
         [Test]
-        public void BlankEnvironmentNeverFallsBackToDevelopment()
+        public void LegacyBlankManualEnvironmentNormalizesToDevelopment()
         {
+            profile.EnvironmentResolutionMode =
+                SimultriaViewerEnvironmentResolutionMode.Manual;
             profile.EnvironmentId = default(ApiEnvironmentId);
 
             bool created = profile.TryCreatePayload(
                 12,
-                out _,
+                out SimultriaViewerInitializationPayload payload,
                 out string error);
 
-            Assert.That(created, Is.False);
-            Assert.That(error, Does.Contain("environment is required"));
-            Assert.That(profile.EnvironmentId.IsEmpty, Is.True);
+            Assert.That(created, Is.True, error);
+            Assert.That(
+                profile.EnvironmentId,
+                Is.EqualTo(SimultriaEnvironmentIds.Development));
+            Assert.That(
+                payload.EnvironmentId,
+                Is.EqualTo(SimultriaEnvironmentIds.Development.Value));
+
+            profile.EnvironmentId = SimultriaEnvironmentIds.Local;
+            Assert.That(
+                profile.EnvironmentId,
+                Is.EqualTo(SimultriaEnvironmentIds.Local));
+        }
+
+        [Test]
+        public void AutomaticProfileIgnoresItsUnusedManualEnvironmentField()
+        {
+            profile.EnvironmentResolutionMode =
+                SimultriaViewerEnvironmentResolutionMode
+                    .AutomaticFromUnityBuildVersion;
+            profile.EnvironmentId = default(ApiEnvironmentId);
+
+            bool hasError = SimultriaViewerIntegration.Editor
+                .SimultriaViewerProjectChecks.TryGetManualEnvironmentError(
+                    profile,
+                    out string error);
+
+            Assert.That(hasError, Is.False);
+            Assert.That(error, Is.Null);
         }
 
         [Test]
@@ -143,6 +172,101 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 Assert.That(
                     profile.EffectiveProfileReference,
                     Is.SameAs(connectionSettings));
+            }
+            finally
+            {
+                Object.DestroyImmediate(connectionSettings);
+                foreach (ApiEnvironmentProfile environment in environments)
+                {
+                    Object.DestroyImmediate(environment);
+                }
+            }
+        }
+
+        [Test]
+        public void BlankLocalSelectionRemainsLocalAndNeverUsesDevelopmentHost()
+        {
+            ApiServiceDefinition definition =
+                SimultriaApiDefinitionDefaults.LoadServiceDefinition();
+            Assert.That(definition, Is.Not.Null);
+            Assert.That(
+                definition.TryGetEnvironmentDescriptors(
+                    out IReadOnlyList<ApiEnvironmentDescriptor> descriptors,
+                    out string definitionError),
+                Is.True,
+                definitionError);
+            var environments = new List<ApiEnvironmentProfile>();
+            foreach (ApiEnvironmentDescriptor descriptor in descriptors)
+            {
+                ApiEnvironmentProfile environment =
+                    ScriptableObject.CreateInstance<ApiEnvironmentProfile>();
+                environment.EnvironmentId = descriptor.EnvironmentId.Value;
+                environment.DisplayName = descriptor.DisplayName;
+                environment.Clients.Add(new ApiNamedClientDefinition
+                {
+                    ClientId = SimultriaClientIds.Primary.Value,
+                    BaseUrl = descriptor.EnvironmentId ==
+                        SimultriaEnvironmentIds.Development
+                        ? "https://development-only.invalid"
+                        : string.Empty
+                });
+                environments.Add(environment);
+            }
+
+            ApiConnectionSettings connectionSettings =
+                ApiConnectionSettings.CreateTransient(
+                    environments,
+                    definition);
+            try
+            {
+                profile.EnvironmentId = SimultriaEnvironmentIds.Local;
+                profile.ConnectionSettingsReference = connectionSettings;
+
+                Assert.That(
+                    profile.TryResolveEnvironment(
+                        out ApiEnvironmentStatus local,
+                        out string error),
+                    Is.False);
+                Assert.That(local, Is.Not.Null);
+                Assert.That(
+                    local.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local));
+                Assert.That(local.DisplayName, Is.EqualTo("Local"));
+                Assert.That(
+                    local.Stage,
+                    Is.EqualTo(ApiEnvironmentStage.Local));
+                Assert.That(
+                    local.Stage,
+                    Is.Not.EqualTo(ApiEnvironmentStage.Custom));
+                Assert.That(
+                    local.Availability,
+                    Is.EqualTo(ApiEnvironmentAvailability.Unconfigured));
+                Assert.That(error, Does.Contain("known but not configured"));
+
+                Assert.That(
+                    connectionSettings.TryCreateComposition(
+                        out var composition,
+                        out string compositionError),
+                    Is.True,
+                    compositionError);
+                Assert.That(
+                    composition.GetEnvironmentStatus(
+                        SimultriaEnvironmentIds.Development).Availability,
+                    Is.EqualTo(ApiEnvironmentAvailability.Configured));
+                Assert.That(
+                    SimultriaViewerIntegration.Editor
+                        .SimultriaViewerDevelopmentCommandService.TryCreateCommand(
+                            profile,
+                            out var command,
+                            out string commandError),
+                    Is.False);
+                Assert.That(command, Is.Null);
+                Assert.That(
+                    commandError,
+                    Does.Contain("known but not configured"));
+                Assert.That(
+                    profile.EnvironmentId,
+                    Is.EqualTo(SimultriaEnvironmentIds.Local));
             }
             finally
             {
