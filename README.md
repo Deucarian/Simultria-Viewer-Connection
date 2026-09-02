@@ -229,6 +229,49 @@ selected. Report Viewer can keep its explicit committed project setting enabled.
 
 ## Consumer composition
 
+### Shared product connection and initialization
+
+Product viewer features expose their project-owned connection explicitly by
+implementing `ISimultriaViewerConnectionSettingsSource`. The sole member,
+`SimultriaViewerConnectionSettings`, lets Editor build validation compare the
+feature with `SimultriaViewerBuildConfiguration` without field-name reflection
+or knowledge of a Report/Activity component type.
+
+Use `SimultriaViewerModelInitializationCoordinator` instead of independently
+creating an `ApiComposition`, API client, environment choice, and
+`SimultriaViewerModelInitializationResolver` in each product. Its `Prepare`
+overloads accept either project-owned `ApiConnectionSettings` plus an
+`ApiClientConfig` and `IApiAuthProvider`, an already-created composition and
+client, or the active `SimultriaViewerRuntimeConnectionContext`.
+
+The returned `SimultriaViewerModelInitializationPlan` contains the exact
+effective `ApiEnvironmentId`, resolved primary client, composition, API client,
+and canonical resolver. Call `ResolveAsync` on a successful plan to resolve the
+model. When `SimultriaViewerRuntimeEnvironment` is active, that immutable value
+wins and any explicit payload mismatch is rejected. Without it, the payload
+must contain a valid environment ID. No overload chooses Development,
+Production, or any other fallback. A configured Local payload therefore remains
+`simultria.local`; an unconfigured Local slot fails closed.
+
+For a complete product initialization, call the coordinator's `ExecuteAsync`.
+It owns payload and stale-revision validation, active-lease selection, the
+explicit Editor-test fallback policy, model resolution, application-failure
+propagation, and canonical success payload assembly. The product supplies only
+an application-neutral async delegate that maps the resolved model into its
+viewer application. This keeps Activity and Report orchestration identical
+without adding a Template Viewer dependency to this package.
+
+The optional runtime provider also publishes a
+`SimultriaViewerRuntimeConnectionContext` for exactly the lifetime of its
+`ViewerRuntimeConnection`. This is the client-bearing companion to the
+sanitized `SimultriaViewerRuntimeEnvironment`: it exposes the lease's exact
+composition, primary client, API client, and environment, but no authentication
+session or bearer value. Consumers may reuse those objects and must never
+dispose or replace them. `TryGetCurrent` returns false outside the active lease
+and never creates a client. Plans recheck the owning context after awaited model
+resolution and again immediately before the product delegate, failing closed if
+the exact lease was released in either interval.
+
 A viewer composition root injects its existing Command Routing runtime into the
 shared scene port:
 
@@ -345,9 +388,31 @@ The editor window can explicitly export:
 `Assets/StreamingAssets/simultria-viewer-context.json`
 
 The file contains the same canonical command envelope, but no token, credential,
-base URL, or authentication route. There is no automatic build hook: export and
-clear are deliberate local actions. A consumer may ignore this generated path,
-but accidental versioning does not expose credentials.
+base URL, or authentication route. Explicit export and clear remain available
+for local harnesses.
+
+Build Pipeline 0.6.0 automatically discovers
+`SimultriaViewerBuildLifecycleContributor` when the selected scene contains a
+`SimultriaViewerBuildConnectionGate`. Validation requires one gate and build
+configuration, one or more feature connection sources bound to the same
+settings, an explicit resolved build-directory environment, and every remote
+promotable environment. Development additionally requires the selected Manual
+context and its explicit resolved environment; Automatic resolution fails
+closed during synchronous build preparation.
+
+Preparation snapshots and removes the current and legacy context files and
+their metadata. Development exports only the selected credential-free current
+context; Production exports neither. The exact prior file state is restored
+after success, build failure, validation failure, or partial preparation.
+Generated Development artifacts must contain one safe current context at the
+exact WebGL-loadable `StreamingAssets/simultria-viewer-context.json` path.
+Production artifacts containing either context filename anywhere are rejected,
+and their contained build output is removed through Build Pipeline's safe output
+policy. The contributor claims a request only after successful inspection
+detects a Simultria connection gate or canonical connection-settings source,
+so unrelated and zero-scene builds remain owned by their normal contributors.
+Once either viewer marker is detected, a missing gate plus selection,
+partial-inspection, and configuration issues enter validation and fail closed.
 
 ## Report Viewer migration
 

@@ -9,7 +9,8 @@ Follow the canonical Package Registry architecture and dependency rules.
 This optional connection package owns the adapter between Simultria API,
 Viewer Authentication, Command Routing, and generic viewer initialization. It
 also owns credential-free development profiles, their project/local selection,
-and an explicit local development-context export.
+explicit local development-context export, and reversible automatic build
+lifecycle preparation for viewer scenes.
 
 It must not own HTTP transport, session storage, authentication UI, endpoint
 URLs, environment URL templates, Report/Activity marker-media-command behavior,
@@ -27,6 +28,9 @@ generic viewer UI, or a viewer application bootstrap.
 - The project default lives in `ProjectSettings`; a local override lives only in
   gitignored `UserSettings`.
 - WebGL development export is explicit, optional, and credential-free.
+- Build lifecycle preparation snapshots and restores the current and legacy
+  context files byte-for-byte, exports only credential-free Development
+  context, and leaves Production builds without either context file.
 - Runtime connection leases must use the same session for target registration,
   API authentication, and trusted-origin model loading.
 - Model URLs are resolved only for live dispatch and never include bearer

@@ -17,6 +17,7 @@
   ],
   "requiredDependencies": [
     "com.deucarian.api",
+    "com.deucarian.build-pipeline",
     "com.deucarian.command-routing",
     "com.deucarian.editor",
     "com.deucarian.logging",
