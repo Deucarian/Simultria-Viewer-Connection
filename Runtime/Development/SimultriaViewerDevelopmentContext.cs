@@ -70,6 +70,12 @@ namespace Deucarian.SimultriaViewerIntegration
             set => environmentId = value;
         }
 
+        /// <summary>
+        /// The environment explicitly serialized on this context, before the
+        /// legacy blank-Manual compatibility behavior is applied.
+        /// </summary>
+        internal ApiEnvironmentId ConfiguredEnvironmentId => environmentId;
+
         public SimultriaViewerEnvironmentResolutionMode
             EnvironmentResolutionMode
         {

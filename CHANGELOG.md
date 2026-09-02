@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.1.0] - 2026-09-02
+
+### Added
+
+- Added an explicit connection-settings source contract for product viewer
+  features, allowing build validation to compare project configuration without
+  reflection.
+- Added one package-owned model-initialization coordinator that resolves the
+  immutable runtime environment, validates an explicit payload environment,
+  preserves Local as Local, and composes the canonical model resolver from an
+  exact API composition and authenticated client.
+- Added a transport- and application-neutral execution seam that owns
+  stale-revision checks, active-lease selection, resolution failure handling,
+  delegate failure propagation, and canonical success payload assembly for
+  both Activity and Report viewers.
+- Added a client-bearing runtime connection context tied directly to the
+  existing runtime lease. It exposes only the exact environment, composition,
+  primary client, and API client needed by product features; it never exposes a
+  session or bearer value and cannot manufacture a fallback client.
+- Added an automatic Build Pipeline lifecycle contributor for scenes containing
+  the Simultria connection gate. It validates exact connection ownership,
+  resolved promotable environments, and explicit Development context, then
+  performs reversible credential-free context preparation and artifact checks.
+
+### Security
+
+- Initialization composition now fails closed with stable sanitized errors for
+  invalid payloads, unresolved or mismatched environments, unconfigured hosts,
+  missing authentication, missing primary clients, and factory failures.
+- Runtime connection context activation rejects duplicate and environment-
+  mismatched owners, while identity-bound disposal prevents a stale lease from
+  clearing a newer context.
+- Model initialization rechecks its owning lease after asynchronous resolution,
+  immediately before the product delegate, and again after that delegate
+  completes, so stale exact clients cannot produce accepted success.
+- Temporary build context paths are constrained to non-linked project files;
+  current and legacy context bytes and metadata are restored after successful
+  builds, failures, and partial preparation.
+- Build applicability claims only successfully inspected requests where a
+  Simultria connection gate or canonical connection-settings source was
+  detected. Marked viewer scenes still fail closed for a missing gate,
+  selection, partial-inspection, and configuration issues, while a Development
+  artifact is accepted only at the WebGL-loadable
+  `StreamingAssets/simultria-viewer-context.json` path.
+
 ## [1.0.4] - 2026-09-01
 
 ### Fixed

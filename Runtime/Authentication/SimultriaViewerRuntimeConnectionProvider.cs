@@ -191,6 +191,7 @@ namespace Deucarian.SimultriaViewerIntegration
 
             AuthenticationSession session = initialSession;
             IDisposable targetRegistration = null;
+            IDisposable contextRegistration = null;
             SimultriaViewerRuntimeConnectionLifetime lifetime = null;
             try
             {
@@ -261,11 +262,29 @@ namespace Deucarian.SimultriaViewerIntegration
                     return false;
                 }
 
+                if (!SimultriaViewerRuntimeConnectionContext.TryActivate(
+                        environmentId,
+                        resolvedClient,
+                        composition,
+                        apiClient,
+                        out _,
+                        out contextRegistration,
+                        out error))
+                {
+                    targetRegistration.Dispose();
+                    targetRegistration = null;
+                    DiscardInitialSession(session);
+                    ReleaseLease();
+                    return false;
+                }
+
                 lifetime = new SimultriaViewerRuntimeConnectionLifetime(
                     targetRegistration,
+                    contextRegistration,
                     session,
                     ReleaseLease);
                 targetRegistration = null;
+                contextRegistration = null;
                 connection = new ViewerRuntimeConnection(
                     SimultriaViewerConnectionAuthentication.DefaultTargetId,
                     lifetime.Session,
@@ -286,6 +305,7 @@ namespace Deucarian.SimultriaViewerIntegration
             catch (Exception exception)
             {
                 lifetime?.Dispose();
+                contextRegistration?.Dispose();
                 targetRegistration?.Dispose();
                 if (lifetime == null)
                 {
@@ -352,15 +372,18 @@ namespace Deucarian.SimultriaViewerIntegration
         IDisposable
     {
         private IDisposable registration;
+        private IDisposable contextRegistration;
         private AuthenticationSession session;
         private Action release;
 
         internal SimultriaViewerRuntimeConnectionLifetime(
             IDisposable registration,
+            IDisposable runtimeContextRegistration,
             AuthenticationSession session,
             Action release)
         {
             this.registration = registration;
+            contextRegistration = runtimeContextRegistration;
             this.session = session;
             this.release = release;
         }
@@ -370,13 +393,22 @@ namespace Deucarian.SimultriaViewerIntegration
         public void Dispose()
         {
             IDisposable currentRegistration = registration;
+            IDisposable currentContextRegistration = contextRegistration;
             Action currentRelease = release;
             registration = null;
+            contextRegistration = null;
             session = null;
             release = null;
             try
             {
-                currentRegistration?.Dispose();
+                try
+                {
+                    currentContextRegistration?.Dispose();
+                }
+                finally
+                {
+                    currentRegistration?.Dispose();
+                }
             }
             finally
             {

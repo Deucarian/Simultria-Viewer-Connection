@@ -12,6 +12,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
     {
         public const string ExportAssetPath =
             "Assets/StreamingAssets/simultria-viewer-context.json";
+        public const string LegacyExportAssetPath =
+            "Assets/StreamingAssets/dev-viewer-context.json";
 
         public static bool TryExport(
             SimultriaViewerDevelopmentContext profile,
