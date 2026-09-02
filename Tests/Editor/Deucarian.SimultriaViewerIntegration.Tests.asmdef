@@ -4,6 +4,7 @@
   "references": [
     "Deucarian.Editor",
     "Deucarian.API",
+    "Deucarian.BuildPipeline.Editor",
     "Deucarian.CommandRouting",
     "Deucarian.Session",
     "Deucarian.Simultria.API",
