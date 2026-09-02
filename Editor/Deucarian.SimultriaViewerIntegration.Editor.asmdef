@@ -4,6 +4,7 @@
   "references": [
     "Deucarian.API",
     "Deucarian.API.Editor",
+    "Deucarian.BuildPipeline.Editor",
     "Deucarian.CommandRouting",
     "Deucarian.Editor",
     "Deucarian.Logging",

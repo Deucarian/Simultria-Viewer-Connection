@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.simultria-viewer-integration",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "displayName": "Deucarian Simultria Viewer Integration",
   "description": "Viewer-specific Simultria adapter wiring and credential-free development context.",
   "unity": "6000.0",
@@ -21,6 +21,7 @@
   ],
   "dependencies": {
     "com.deucarian.api": "2.0.2",
+    "com.deucarian.build-pipeline": "0.6.0",
     "com.deucarian.command-routing": "0.2.5",
     "com.deucarian.editor": "1.2.0",
     "com.deucarian.logging": "1.0.4",
