@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1] - 2026-09-02
+
+### Fixed
+
+- Replaced a test-only `out`-parameter lambda with an equivalent selector
+  object so the canonical syntax-aware governance audit can parse the suite
+  deterministically.
+
 ## [1.1.0] - 2026-09-02
 
 ### Added
