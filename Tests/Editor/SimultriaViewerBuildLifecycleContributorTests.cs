@@ -385,17 +385,31 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         {
             return new SimultriaViewerBuildLifecycleContributor(
                 inspector,
-                (out SimultriaViewerDevelopmentContext selected,
-                 out string source,
-                 out string error) =>
-                {
-                    selected = context;
-                    source = "test";
-                    error = context == null ? "missing" : string.Empty;
-                    return context != null;
-                },
+                new FixedContextSelector(context).TrySelect,
                 new NoOpPreparation(),
                 new AcceptingArtifactValidator());
+        }
+
+        private sealed class FixedContextSelector
+        {
+            private readonly SimultriaViewerDevelopmentContext context;
+
+            internal FixedContextSelector(
+                SimultriaViewerDevelopmentContext value)
+            {
+                context = value;
+            }
+
+            internal bool TrySelect(
+                out SimultriaViewerDevelopmentContext selected,
+                out string source,
+                out string error)
+            {
+                selected = context;
+                source = "test";
+                error = context == null ? "missing" : string.Empty;
+                return context != null;
+            }
         }
 
         private sealed class FailingInspector :
