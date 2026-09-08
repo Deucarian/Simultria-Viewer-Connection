@@ -1,0 +1,14 @@
+name: Deucarian package validation
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: Deucarian/Package-Registry/.github/workflows/deucarian-package-validation.yml@develop
