@@ -29,7 +29,11 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 2.0.2,
-Simultria API 1.1.0, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
+Simultria API 1.1.1, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
+Connection 1.2.2 declares the reconciled API 1.1.1 baseline instead of the
+ambiguous 1.1.0 release for its central-directory lookup contract.
+This dependency correction does not change Connection's exact-version,
+missing-record fallback, or startup-status policy.
 
 ## Player build configuration
 
