@@ -66,6 +66,37 @@ disabled until that decision and its runtime connection provider are ready.
 Development contexts and their manual/version override fields compile only in
 the Unity Editor and should live in an `Editor` folder or Editor-only settings.
 
+### Observing connection startup (1.2.1)
+
+An optional presentation adapter can explicitly reference the gate and check
+`ContainsStartupBehaviour(bootstrap)` to confirm the authored startup owner.
+There is no automatic discovery, global registration, or Template/Web dependency.
+Subscribe to the instance's `StartupStatusChanged` event first, then read
+`StartupStatus` to replay the current immutable `SimultriaViewerBuildStartupSnapshot`.
+Unsubscribe when the observer is disabled or destroyed.
+
+The phases are `NotStarted`, `Resolving`, `Routed`, `Fallback`, `Failed`, and
+`Disposed`. `Routed`/`Fallback` mean the runtime provider is registered and the
+immutable environment has been activated; they do **not** mean the engine,
+viewer, model, or host initialization is ready. Only the existing explicit
+missing-record policy can produce `Fallback`, using Production or Development
+from the captured build profile. A routed Local record is not a profile fallback.
+
+Only `Routed`/`Fallback` carry an environment, restricted to the five built-in
+Simultria IDs; custom Editor environment identifiers are omitted. `Failed`
+carries only a `SimultriaViewerBuildStartupFailureCode`: environment resolution,
+provider creation, provider registration, environment activation, or startup
+cancellation. Other phases carry `None`. No exception, diagnostic message, URL,
+build identity, or credential appears in this status contract. Its public
+constructor supports independently testable adapters, validates phase/code
+combinations, and never changes the gate or its routing decision.
+
+Failures keep startup disabled and release this gate's provider registration.
+Factory exceptions are contained, status observer exceptions are isolated, and
+late asynchronous completions cannot reopen a disposed gate. `Disposed` is a
+final replayable snapshot; existing event subscriptions are then cleared. The
+global immutable runtime environment is not reset or rerouted by this status API.
+
 ## Development context
 
 Create a context from:

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.Logging;
 using Deucarian.Authentication;
+using Deucarian.API.Configuration;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
 using UnityEngine;
@@ -33,6 +34,11 @@ namespace Deucarian.SimultriaViewerIntegration
         private CancellationTokenSource cancellation;
         private IDisposable providerRegistration;
         private SimultriaViewerEnvironmentResolver resolver;
+        private Func<SimultriaViewerEnvironmentResolver> resolverFactory;
+        private Func<ApiConnectionSettings, ApiEnvironmentId,
+            IViewerRuntimeConnectionProvider> providerFactory;
+        private bool started;
+        private bool disposed;
 
         public SimultriaViewerBuildConfiguration BuildConfiguration =>
             buildConfiguration;
@@ -54,97 +60,144 @@ namespace Deucarian.SimultriaViewerIntegration
         public Task PendingResolution { get; private set; } =
             Task.CompletedTask;
 
-        private void Awake()
+        /// <summary>
+        /// Subscribe to StartupStatusChanged first, then read this property to
+        /// replay the current state. Routed/Fallback mean connection readiness,
+        /// not viewer or model readiness. No diagnostic payload is exposed.
+        /// </summary>
+        public SimultriaViewerBuildStartupSnapshot StartupStatus { get; private set; } =
+            new SimultriaViewerBuildStartupSnapshot(
+                SimultriaViewerBuildStartupPhase.NotStarted);
+
+        /// <summary>
+        /// Instance-owned lifecycle notification. Observer exceptions do not
+        /// affect startup. Disposed is final and releases existing observers.
+        /// </summary>
+        public event Action<SimultriaViewerBuildStartupSnapshot> StartupStatusChanged;
+
+        /// <summary>Checks explicit ownership without discovering scene objects.</summary>
+        public bool ContainsStartupBehaviour(Behaviour behaviour)
         {
-            SetStartupEnabled(false);
+            if (behaviour == null || behaviour == this || startupBehaviours == null)
+                return false;
+            for (int i = 0; i < startupBehaviours.Length; i++)
+                if (startupBehaviours[i] == behaviour)
+                    return true;
+            return false;
+        }
+
+        private void Awake() => BeginStartup();
+
+        internal void BeginStartup()
+        {
+            if (started || disposed)
+                return;
+            started = true;
             cancellation = new CancellationTokenSource();
-            resolver = resolver ??
-                SimultriaViewerEnvironmentResolver.CreateDefault(
-                    buildProfileEnvironmentId);
-            PendingResolution = ResolveAndOpenAsync(cancellation.Token);
+            CancellationToken token = cancellation.Token;
+            SetStartupEnabled(false);
+            if (disposed)
+                return;
+            Publish(new SimultriaViewerBuildStartupSnapshot(
+                SimultriaViewerBuildStartupPhase.Resolving));
+            if (!disposed)
+                PendingResolution = ResolveAndOpenAsync(token);
         }
 
         private async Task ResolveAndOpenAsync(
             CancellationToken cancellationToken)
         {
-            SimultriaViewerEnvironmentResolution result;
+            var failure = SimultriaViewerBuildStartupFailureCode.EnvironmentResolutionFailed;
             try
             {
-                result = await resolver.ResolveForCurrentRuntimeAsync(
-                    buildConfiguration,
-                    cancellationToken);
+                resolver = resolver ?? (resolverFactory != null
+                    ? resolverFactory()
+                    : SimultriaViewerEnvironmentResolver.CreateDefault(
+                        buildProfileEnvironmentId));
+                if (StopIfCancelled(cancellationToken))
+                    return;
+                SimultriaViewerEnvironmentResolution result =
+                    await resolver.ResolveForCurrentRuntimeAsync(
+                        buildConfiguration,
+                        cancellationToken);
+                if (StopIfCancelled(cancellationToken))
+                    return;
+
+                Resolution = result;
+                if (result?.Succeeded != true)
+                {
+                    Fail(failure);
+                    return;
+                }
+
+                failure = SimultriaViewerBuildStartupFailureCode.ProviderCreationFailed;
+                bool created = TryCreateProvider(result,
+                    out IViewerRuntimeConnectionProvider provider, out _);
+                if (StopIfCancelled(cancellationToken))
+                    return;
+                if (!created || provider == null)
+                {
+                    Fail(failure);
+                    return;
+                }
+
+                failure = SimultriaViewerBuildStartupFailureCode.ProviderRegistrationFailed;
+                providerRegistration =
+                    ViewerRuntimeConnectionProviderRegistry.Register(provider);
+                if (StopIfCancelled(cancellationToken))
+                {
+                    ReleaseProvider();
+                    return;
+                }
+
+                failure = SimultriaViewerBuildStartupFailureCode.EnvironmentActivationFailed;
+                bool activated = SimultriaViewerRuntimeEnvironment.TryActivate(
+                    result, out _);
+                if (StopIfCancelled(cancellationToken))
+                    return;
+                if (!activated)
+                {
+                    Fail(failure);
+                    return;
+                }
+
+                Publish(new SimultriaViewerBuildStartupSnapshot(
+                    result.UsedBuildProfileFallback
+                        ? SimultriaViewerBuildStartupPhase.Fallback
+                        : SimultriaViewerBuildStartupPhase.Routed,
+                    environmentId: result.EnvironmentId));
+                if (!StopIfCancelled(cancellationToken))
+                    SetStartupEnabled(true);
             }
             catch (OperationCanceledException)
             {
-                return;
+                Fail(SimultriaViewerBuildStartupFailureCode.StartupCancelled);
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                Log.Error(
-                    "Viewer startup stopped because environment resolution " +
-                    "failed (" + exception.GetType().Name + ").",
-                    this);
-                return;
+                Fail(failure);
             }
+        }
 
-            Resolution = result;
-            if (result?.Succeeded != true)
-            {
-                Log.Error(
-                    "Viewer startup stopped: " +
-                    (result?.Message ??
-                     "the effective Simultria environment is unresolved.") +
-                    " " + result?.ToDiagnosticString(),
-                    this);
-                return;
-            }
+        private bool StopIfCancelled(CancellationToken token)
+        {
+            if (disposed)
+                return true;
+            if (!token.IsCancellationRequested)
+                return false;
+            Fail(SimultriaViewerBuildStartupFailureCode.StartupCancelled);
+            return true;
+        }
 
-            if (!TryCreateProvider(
-                    result,
-                    out IViewerRuntimeConnectionProvider provider,
-                    out string providerError))
-            {
-                Log.Error(
-                    "Viewer startup stopped: " + providerError + " " +
-                    result.ToDiagnosticString(),
-                    this);
+        private void Fail(SimultriaViewerBuildStartupFailureCode code)
+        {
+            if (disposed || StartupStatus.Phase == SimultriaViewerBuildStartupPhase.Failed)
                 return;
-            }
-
-            try
-            {
-                providerRegistration =
-                    ViewerRuntimeConnectionProviderRegistry.Register(provider);
-            }
-            catch (Exception exception)
-            {
-                Log.Error(
-                    "Viewer startup stopped because its resolved runtime " +
-                    "connection could not be registered (" +
-                    exception.GetType().Name + "). " +
-                    result.ToDiagnosticString(),
-                    this);
-                return;
-            }
-
-            if (!SimultriaViewerRuntimeEnvironment.TryActivate(
-                    result,
-                    out string activationError))
-            {
-                providerRegistration.Dispose();
-                providerRegistration = null;
-                Log.Error(
-                    "Viewer startup stopped: " + activationError + " " +
-                    result.ToDiagnosticString(),
-                    this);
-                return;
-            }
-
-            Log.Info(
-                "Resolved the viewer environment. " +
-                result.ToDiagnosticString(),
-                this);
-            SetStartupEnabled(true);
+            ReleaseProvider();
+            SetStartupEnabled(false);
+            Publish(new SimultriaViewerBuildStartupSnapshot(
+                SimultriaViewerBuildStartupPhase.Failed, code));
+            Log.Error("Viewer startup stopped: " + code + ".", this);
         }
 
         private bool TryCreateProvider(
@@ -162,9 +215,9 @@ namespace Deucarian.SimultriaViewerIntegration
                 return false;
             }
 
-            provider = CreateProvider(
-                connection,
-                resolution.EnvironmentId);
+            provider = providerFactory != null
+                ? providerFactory(connection, resolution.EnvironmentId)
+                : CreateProvider(connection, resolution.EnvironmentId);
             error = string.Empty;
             return true;
         }
@@ -187,6 +240,8 @@ namespace Deucarian.SimultriaViewerIntegration
 
             for (int i = 0; i < startupBehaviours.Length; i++)
             {
+                if (value && disposed)
+                    return;
                 Behaviour behaviour = startupBehaviours[i];
                 if (behaviour != null && behaviour != this)
                 {
@@ -195,23 +250,79 @@ namespace Deucarian.SimultriaViewerIntegration
             }
         }
 
-        private void OnDestroy()
+        private void Publish(SimultriaViewerBuildStartupSnapshot snapshot)
         {
-            cancellation?.Cancel();
-            cancellation?.Dispose();
-            cancellation = null;
-            providerRegistration?.Dispose();
+            if (disposed && snapshot.Phase != SimultriaViewerBuildStartupPhase.Disposed)
+                return;
+            StartupStatus = snapshot;
+            Delegate[] observers = StartupStatusChanged?.GetInvocationList();
+            if (observers == null)
+                return;
+            foreach (Delegate observer in observers)
+            {
+                // A prior callback may have disposed this gate. Do not replay
+                // the superseded state to remaining observers.
+                if (!ReferenceEquals(StartupStatus, snapshot))
+                    break;
+                try
+                {
+                    ((Action<SimultriaViewerBuildStartupSnapshot>)observer)(snapshot);
+                }
+                catch (Exception)
+                {
+                    Log.Warning("A viewer startup status observer failed.", this);
+                }
+            }
+        }
+
+        private void ReleaseProvider()
+        {
+            IDisposable registration = providerRegistration;
             providerRegistration = null;
+            registration?.Dispose();
+        }
+
+        private void OnDestroy() => DisposeStartup();
+
+        internal void DisposeStartup()
+        {
+            if (disposed)
+                return;
+            disposed = true;
+            CancellationTokenSource source = cancellation;
+            cancellation = null;
+            try
+            {
+                source?.Cancel();
+            }
+            catch (Exception)
+            {
+                Log.Warning("Viewer startup cancellation cleanup failed.", this);
+            }
+            finally
+            {
+                source?.Dispose();
+                ReleaseProvider();
+                SetStartupEnabled(false);
+                Publish(new SimultriaViewerBuildStartupSnapshot(
+                    SimultriaViewerBuildStartupPhase.Disposed));
+                StartupStatusChanged = null;
+            }
         }
 
         internal void ConfigureForTests(
             SimultriaViewerBuildConfiguration configuration,
             Behaviour[] behaviours,
-            SimultriaViewerEnvironmentResolver testResolver)
+            SimultriaViewerEnvironmentResolver testResolver,
+            Func<ApiConnectionSettings, ApiEnvironmentId,
+                IViewerRuntimeConnectionProvider> testProviderFactory = null,
+            Func<SimultriaViewerEnvironmentResolver> testResolverFactory = null)
         {
             buildConfiguration = configuration;
             startupBehaviours = behaviours ?? Array.Empty<Behaviour>();
             resolver = testResolver;
+            providerFactory = testProviderFactory;
+            resolverFactory = testResolverFactory;
         }
     }
 }

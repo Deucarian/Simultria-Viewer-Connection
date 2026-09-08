@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.1] - 2026-09-08
+
+### Added
+
+- Expose instance-owned, replayable immutable connection-gate startup status
+  with bounded phases/failure codes and only allowlisted environment IDs.
+- Provide an explicit startup-behaviour ownership check for optional adapters,
+  without introducing a Template Viewer or WebGL dependency.
+
+### Fixed
+
+- Contain resolver/provider factory, registration, and activation failures so
+  early startup failures remain visible while the viewer stays disabled.
+- Prevent cancelled/disposed gates from reopening on late lookup completion;
+  isolate status observer failures and release subscriptions on disposal.
+- Retain exact version lookup, immutable environment activation, and stamped
+  build-profile fallback rules unchanged.
+
 ## [1.2.0] - 2026-09-08
 
 - Compiled Development context omits Editor environment selection and defers to
