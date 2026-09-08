@@ -3,6 +3,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.Logging;
 using Deucarian.Authentication;
+using Deucarian.API.Models;
+using Deucarian.Simultria.API.Configuration;
 using UnityEngine;
 
 namespace Deucarian.SimultriaViewerIntegration
@@ -20,6 +22,8 @@ namespace Deucarian.SimultriaViewerIntegration
 
         [SerializeField] private SimultriaViewerBuildConfiguration
             buildConfiguration;
+        [SerializeField, HideInInspector] private ApiEnvironmentId
+            buildProfileEnvironmentId;
         [Tooltip(
             "Viewer startup components that must remain disabled until the " +
             "effective environment and runtime connection are ready.")]
@@ -33,6 +37,18 @@ namespace Deucarian.SimultriaViewerIntegration
         public SimultriaViewerBuildConfiguration BuildConfiguration =>
             buildConfiguration;
 
+        internal ApiEnvironmentId BuildProfileEnvironmentId =>
+            buildProfileEnvironmentId;
+
+#if UNITY_EDITOR
+        internal void CaptureBuildProfileEnvironment(bool developmentBuild)
+        {
+            buildProfileEnvironmentId = developmentBuild
+                ? SimultriaEnvironmentIds.Development
+                : SimultriaEnvironmentIds.Production;
+        }
+#endif
+
         public SimultriaViewerEnvironmentResolution Resolution { get; private set; }
 
         public Task PendingResolution { get; private set; } =
@@ -43,7 +59,8 @@ namespace Deucarian.SimultriaViewerIntegration
             SetStartupEnabled(false);
             cancellation = new CancellationTokenSource();
             resolver = resolver ??
-                SimultriaViewerEnvironmentResolver.CreateDefault();
+                SimultriaViewerEnvironmentResolver.CreateDefault(
+                    buildProfileEnvironmentId);
             PendingResolution = ResolveAndOpenAsync(cancellation.Token);
         }
 

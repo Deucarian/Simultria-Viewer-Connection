@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.0] - 2026-09-08
+
+- Compiled Development context omits Editor environment selection and defers to
+  the runtime version/profile gate. Both Manual and Automatic Editor contexts
+  can supply model IDs without a build-time lookup. Explicit local-harness
+  exports retain their environment and mismatch protection.
+
+### Changed
+
+- Use Simultria API's fixed central Production version directory independently
+  of all runtime backend and Editor environment settings. Legacy directory
+  selectors remain obsolete no-ops and no longer serialize or appear in assets.
+- Retain Editor manual environment selection; exact player version records
+  remain authoritative. Only an explicitly missing record may fall back to the
+  selected build profile's captured environment, never another active version.
+- Capture that fallback in the built scene copy without modifying source scenes,
+  configuration assets, or Editor Play Mode. Old builds require a full rebuild.
+- Expose fallback provenance while retaining one immutable environment/session
+  binding. Other lookup failures remain failures; admin runtime overrides and
+  backend/server rollout are separate work.
+- Require Simultria API 1.1.0 and add central-lookup, fallback, migration, and
+  scene-stamping regression tests.
+
 ## [1.1.1] - 2026-09-02
 
 ### Fixed

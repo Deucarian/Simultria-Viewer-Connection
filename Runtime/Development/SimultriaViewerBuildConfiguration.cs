@@ -1,3 +1,4 @@
+using System;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
@@ -17,14 +18,9 @@ namespace Deucarian.SimultriaViewerIntegration
     public sealed class SimultriaViewerBuildConfiguration : ScriptableObject
     {
         [Tooltip(
-            "Project-owned API connection containing the public Unity build " +
-            "directory and all environments that the directory may return.")]
+            "Project-owned API connection containing runtime backend " +
+            "environments. Version lookup always uses central Production.")]
         [SerializeField] private ApiConnectionSettings connectionSettings;
-        [Tooltip(
-            "Configured API environment that hosts the public Unity build " +
-            "directory. This is the directory location, not the build's " +
-            "assigned target environment.")]
-        [SerializeField] private ApiEnvironmentId buildDirectoryEnvironmentId;
         [Tooltip(
             "Canonical backend product identifier, for example " +
             "design_and_sales or holo_helmet.")]
@@ -36,10 +32,12 @@ namespace Deucarian.SimultriaViewerIntegration
             set => connectionSettings = value;
         }
 
+        [Obsolete("The Unity build directory is fixed on central Production. " +
+                  "This legacy selection is ignored.")]
         public ApiEnvironmentId BuildDirectoryEnvironmentId
         {
-            get => buildDirectoryEnvironmentId;
-            set => buildDirectoryEnvironmentId = value;
+            get => SimultriaEnvironmentIds.Production;
+            set { }
         }
 
         public string Product

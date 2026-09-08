@@ -51,7 +51,8 @@ namespace Deucarian.SimultriaViewerIntegration
             string applicationName,
             bool editorOverrideActive,
             string errorCode,
-            string message)
+            string message,
+            bool usedBuildProfileFallback)
         {
             Succeeded = succeeded;
             Mode = mode;
@@ -64,6 +65,7 @@ namespace Deucarian.SimultriaViewerIntegration
             EditorOverrideActive = editorOverrideActive;
             ErrorCode = errorCode ?? string.Empty;
             Message = message ?? string.Empty;
+            UsedBuildProfileFallback = usedBuildProfileFallback;
         }
 
         public bool Succeeded { get; }
@@ -84,6 +86,8 @@ namespace Deucarian.SimultriaViewerIntegration
 
         public bool EditorOverrideActive { get; }
 
+        public bool UsedBuildProfileFallback { get; }
+
         public string ErrorCode { get; }
 
         public string Message { get; }
@@ -96,7 +100,8 @@ namespace Deucarian.SimultriaViewerIntegration
             string source,
             SimultriaViewerRuntimeKind runtimeKind,
             string applicationName,
-            bool editorOverrideActive)
+            bool editorOverrideActive,
+            bool usedBuildProfileFallback = false)
         {
             return new SimultriaViewerEnvironmentResolution(
                 true,
@@ -109,7 +114,8 @@ namespace Deucarian.SimultriaViewerIntegration
                 applicationName,
                 editorOverrideActive,
                 null,
-                null);
+                null,
+                usedBuildProfileFallback);
         }
 
         internal static SimultriaViewerEnvironmentResolution Failure(
@@ -135,7 +141,8 @@ namespace Deucarian.SimultriaViewerIntegration
                 applicationName,
                 editorOverrideActive,
                 errorCode,
-                message);
+                message,
+                false);
         }
 
         public string ToDiagnosticString()

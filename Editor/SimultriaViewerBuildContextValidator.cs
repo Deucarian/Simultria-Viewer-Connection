@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using Deucarian.API.Models;
 using Deucarian.CommandRouting;
 using Newtonsoft.Json.Linq;
 
@@ -116,13 +115,18 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     out _) ||
                 payload == null ||
                 !payload.IsValid(out _) ||
-                !ApiEnvironmentId.TryParse(
-                    payload.EnvironmentId,
-                    out ApiEnvironmentId _) ||
                 !string.IsNullOrWhiteSpace(payload.ModelUrl) ||
                 !string.IsNullOrWhiteSpace(payload.ModelVersion))
             {
                 issue = "The development context payload is invalid or unsafe.";
+                return false;
+            }
+
+            if ((root["payload"] as JObject)?.Property(
+                    "environment_id", StringComparison.OrdinalIgnoreCase) != null)
+            {
+                issue = "A compiled development context must defer its " +
+                        "environment to the player's version-routing gate.";
                 return false;
             }
 

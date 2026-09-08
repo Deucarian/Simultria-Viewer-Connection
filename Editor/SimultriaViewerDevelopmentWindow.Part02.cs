@@ -42,6 +42,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         private static void DrawEnvironmentSelection(
             SimultriaViewerDevelopmentContext profile)
         {
+            EditorGUILayout.LabelField(
+                "Version directory", "Central Production (fixed)");
             if (profile.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode.Manual)
             {

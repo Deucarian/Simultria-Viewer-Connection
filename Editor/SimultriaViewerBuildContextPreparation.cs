@@ -1,5 +1,4 @@
 using System;
-using Deucarian.API.Models;
 using Deucarian.BuildPipeline;
 using UnityEditor.Build;
 
@@ -7,15 +6,13 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     internal delegate bool SimultriaViewerDevelopmentContextExport(
         SimultriaViewerDevelopmentContext profile,
-        ApiEnvironmentId environmentId,
         out string message);
 
     internal interface ISimultriaViewerBuildContextPreparation
     {
         IDisposable Prepare(
             DeucarianBuildEnvironment environment,
-            SimultriaViewerDevelopmentContext profile,
-            ApiEnvironmentId effectiveEnvironmentId);
+            SimultriaViewerDevelopmentContext profile);
     }
 
     internal sealed class SimultriaViewerBuildContextPreparation :
@@ -28,7 +25,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         internal SimultriaViewerBuildContextPreparation()
             : this(
                 () => new SimultriaViewerBuildContextFileScope(),
-                SimultriaViewerWebGlDevelopmentExporter.TryExport)
+                SimultriaViewerWebGlDevelopmentExporter.TryExportForBuild)
         {
         }
 
@@ -44,8 +41,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
         public IDisposable Prepare(
             DeucarianBuildEnvironment environment,
-            SimultriaViewerDevelopmentContext profile,
-            ApiEnvironmentId effectiveEnvironmentId)
+            SimultriaViewerDevelopmentContext profile)
         {
             SimultriaViewerBuildContextFileScope scope = null;
             try
@@ -59,10 +55,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 scope.RemoveAll();
                 if (environment == DeucarianBuildEnvironment.Development)
                 {
-                    if (profile == null || effectiveEnvironmentId.IsEmpty ||
+                    if (profile == null ||
                         !exporter(
                             profile,
-                            effectiveEnvironmentId,
                             out _) ||
                         !SimultriaViewerBuildContextValidator.TryValidateFile(
                             scope.CurrentPath,
