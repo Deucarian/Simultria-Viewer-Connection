@@ -2,7 +2,7 @@
 
 Package ID: `com.deucarian.simultria-viewer-integration`
 
-Follow the canonical Package Registry architecture and dependency rules.
+Follow the [canonical Deucarian architecture and dependency rules](https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md).
 
 ## Ownership
 
