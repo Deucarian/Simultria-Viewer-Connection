@@ -31,7 +31,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     SimultriaViewerDevelopmentWindow.Open,
                     PackageId,
                     searchTerms: new[] { "simultria", "viewer", "development", "context" },
-                    order: 120));
+                    order: 120, createPage: SimultriaViewerDevelopmentWindow.CreatePage));
 
             CardRegistration = DeucarianControlCenterRegistry.RegisterCardProvider(
                 new SimultriaViewerCardProvider());
@@ -180,7 +180,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     new DeucarianControlCenterAction(
                         PackageId + ".open",
                         "Open Viewer Development",
-                        SimultriaViewerDevelopmentWindow.Open)
+                        SimultriaViewerDevelopmentWindow.Open, navigationToolId: DeucarianToolIds.SimultriaViewerDevelopment)
                 },
                 searchTerms: new[]
                 {

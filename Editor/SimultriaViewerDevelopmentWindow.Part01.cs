@@ -19,9 +19,10 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         public static void Open()
         {
             SimultriaViewerDevelopmentWindow window =
-                GetWindow<SimultriaViewerDevelopmentWindow>(
+                DeucarianEditorWindowPages.GetStandalone<SimultriaViewerDevelopmentWindow>(
                     "Simultria Viewer Development");
             window.minSize = CompactMinimumSize;
+            window.Show();
             window.Focus();
         }
 
@@ -42,6 +43,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             operationCancellation?.Dispose();
             operationCancellation = null;
         }
+
+        public static IDeucarianEditorPage CreatePage() =>
+            DeucarianEditorImGuiPage.Create<SimultriaViewerDevelopmentWindow>(DeucarianToolIds.SimultriaViewerDevelopment, window => window.OnGUI());
 
         private void OnGUI()
         {
