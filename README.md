@@ -29,27 +29,77 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 2.0.2,
-Simultria API 1.0.4, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
+Simultria API 1.1.1, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
+Connection 1.2.2 declares the reconciled API 1.1.1 baseline instead of the
+ambiguous 1.1.0 release for its central-directory lookup contract.
+This dependency correction does not change Connection's exact-version,
+missing-record fallback, or startup-status policy.
 
 ## Player build configuration
 
 Player builds use `SimultriaViewerBuildConfiguration`, not a development
-profile. This asset contains only the project-owned API connection, the API
-environment that hosts the public build directory, and the canonical backend
-product. It deliberately has no target-environment or build-version override.
+profile. This asset contains only the project-owned runtime API connection and
+canonical backend product. The central Production directory is fixed by
+Simultria API, separately from every runtime backend address. Legacy serialized
+directory selections are ignored and no longer appear in the Inspector.
 
 At startup the resolver sends the compiled `Application.version` and product
 to `GET /api/v2/unity/builds/versions/{version}/{product}`. It verifies that
 the returned version and product are exact, maps the returned environment, and
-publishes one immutable session decision. Unknown versions, backend fallback
-records, deprecated/unknown environments, transport failures, and unconfigured
-target environments stop startup before a session or authenticated API client
-is created.
+publishes one immutable session decision. An exact record wins over the build
+profile's environment. Only an explicitly missing record permits fallback to
+the captured build-profile environment. Backend substitute records,
+deprecated/unknown environments, unsupported products, transport failures and
+unconfigured targets still stop before a session/authenticated client exists.
+
+During an actual build, `SimultriaViewerBuildProfileSceneProcessor` stamps the
+scene copy's connection gate with Production or Development from Unity's actual
+build flags, which Build Pipeline validates against the selected profile.
+It never reads the Editor environment dropdown, changes a configuration asset,
+or stamps a Play Mode scene. A full rebuild is required to include this stamp;
+old/unstamped players cannot guess a fallback environment. Resolution exposes
+`UsedBuildProfileFallback` and a sanitized `Source` explaining the decision.
+The optional admin-only runtime dropdown is not implemented by this change.
+
+The API owner's `UNITY_BUILD_ROUTING.md` defines missing-record responses.
+A bare HTTP 404 is not sufficient: an unsupported product or missing endpoint
+must not silently switch environments. Live backend rollout remains separate.
 
 `SimultriaViewerBuildConnectionGate` can hold a generic viewer bootstrap
 disabled until that decision and its runtime connection provider are ready.
 Development contexts and their manual/version override fields compile only in
 the Unity Editor and should live in an `Editor` folder or Editor-only settings.
+
+### Observing connection startup (1.2.1)
+
+An optional presentation adapter can explicitly reference the gate and check
+`ContainsStartupBehaviour(bootstrap)` to confirm the authored startup owner.
+There is no automatic discovery, global registration, or Template/Web dependency.
+Subscribe to the instance's `StartupStatusChanged` event first, then read
+`StartupStatus` to replay the current immutable `SimultriaViewerBuildStartupSnapshot`.
+Unsubscribe when the observer is disabled or destroyed.
+
+The phases are `NotStarted`, `Resolving`, `Routed`, `Fallback`, `Failed`, and
+`Disposed`. `Routed`/`Fallback` mean the runtime provider is registered and the
+immutable environment has been activated; they do **not** mean the engine,
+viewer, model, or host initialization is ready. Only the existing explicit
+missing-record policy can produce `Fallback`, using Production or Development
+from the captured build profile. A routed Local record is not a profile fallback.
+
+Only `Routed`/`Fallback` carry an environment, restricted to the five built-in
+Simultria IDs; custom Editor environment identifiers are omitted. `Failed`
+carries only a `SimultriaViewerBuildStartupFailureCode`: environment resolution,
+provider creation, provider registration, environment activation, or startup
+cancellation. Other phases carry `None`. No exception, diagnostic message, URL,
+build identity, or credential appears in this status contract. Its public
+constructor supports independently testable adapters, validates phase/code
+combinations, and never changes the gate or its routing decision.
+
+Failures keep startup disabled and release this gate's provider registration.
+Factory exceptions are contained, status observer exceptions are isolated, and
+late asynchronous completions cannot reopen a disposed gate. `Disposed` is a
+final replayable snapshot; existing event subscriptions are then cleared. The
+global immutable runtime environment is not reset or rerouted by this status API.
 
 ## Development context
 
@@ -62,9 +112,8 @@ The context stores only:
 - an explicit Manual or Automatic-from-Unity-build-version mode;
 - a manual `ApiEnvironmentId` and a project-owned generic
   `ApiConnectionSettings` reference;
-- for automatic mode only, the environment whose configured host exposes the
-  public build directory, the portal product ID, and an optional local/editor
-  build-version override;
+- for automatic mode only, the portal product ID and an optional local/editor
+  build-version override; the directory itself is fixed;
 - project, model, and optional model-version IDs;
 - placement position, rotation, and scale;
 - the development-only force-show option; and
@@ -86,16 +135,17 @@ unconfigured until a developer supplies a host in project-owned settings.
 Editor Automatic mode uses `Application.version` unless the profile supplies an
 explicit local override. Player builds always use `Application.version` from
 the build configuration. Both call the public Simultria route
-`GET /api/v2/unity/builds/versions/{id}/{product}` through the profile's
-explicitly selected build-directory environment. The backend response is the
-only build-to-environment mapping. This package does not create a duplicate
-rules asset or store a build-to-environment table.
+`GET /api/v2/unity/builds/versions/{id}/{product}` at Simultria API's fixed central
+Production directory. The backend response is the normal build-to-environment
+mapping; only a player with an explicitly missing record may use its captured
+profile environment. This package stores no build-to-environment table.
 
-The lookup fails closed when the build version, product, directory environment,
-response identity, backend environment name, or resolved target environment is
-missing or invalid. There is deliberately no implicit Production host or
-Production fallback. Deployment hosts remain solely in the project-owned API
-connection settings.
+Invalid build identity, backend identity/environment, transport or target
+configuration fails closed. Editor automatic mode has no build-profile fallback;
+use its Manual environment dropdown deliberately. Normal backend hosts remain
+in project-owned API settings, independent of the central directory. A selected
+Production build profile supplies a Production fallback, not a Local Editor
+override, and only after the directory explicitly reports a missing record.
 
 Create the referenced connection from:
 
@@ -197,7 +247,7 @@ builds share one project/model/version policy. Resolution failure fails closed.
 Host-provided model URLs are ignored; bearer values are never copied into the
 command or URL query, and bearer-like URL query fields are rejected.
 
-Automatic mode resolves the effective environment before command creation.
+Editor Automatic mode resolves the effective environment before live/local-harness command creation.
 That exact environment ID is written to `initialize_viewer`, used to validate
 the authentication binding, and used for model resolution. The synchronous
 payload and registration overloads intentionally reject an unresolved
@@ -346,7 +396,7 @@ SimultriaViewerEnvironmentResolution resolution =
 
 if (!resolution.Succeeded)
 {
-    // Show resolution.Message and stop; never choose a fallback environment.
+    // Eligible player fallbacks were already resolved. Show this error and stop.
     return;
 }
 
@@ -389,23 +439,33 @@ The editor window can explicitly export:
 
 The file contains the same canonical command envelope, but no token, credential,
 base URL, or authentication route. Explicit export and clear remain available
-for local harnesses.
+for local harnesses. These deliberate Editor exports retain their resolved
+environment, so an explicit mismatch with an already-routed player is rejected.
+They are distinct from automatic compiled-build context preparation.
 
 Build Pipeline 0.6.0 automatically discovers
 `SimultriaViewerBuildLifecycleContributor` when the selected scene contains a
 `SimultriaViewerBuildConnectionGate`. Validation requires one gate and build
 configuration, one or more feature connection sources bound to the same
-settings, an explicit resolved build-directory environment, and every remote
-promotable environment. Development additionally requires the selected Manual
-context and its explicit resolved environment; Automatic resolution fails
-closed during synchronous build preparation.
+settings and every remote promotable environment. The fixed directory no longer
+requires a configured runtime-environment slot. Development additionally requires
+a selected, valid model/project context referencing the same connection settings.
+Either Manual or Automatic Editor profiles can provide that context; their
+environment dropdown and version overrides do not participate in a build.
 
 Preparation snapshots and removes the current and legacy context files and
 their metadata. Development exports only the selected credential-free current
-context; Production exports neither. The exact prior file state is restored
+model/project context, deliberately omitting `environment_id`. The runtime gate
+selects the central record's environment or the eligible captured-profile
+fallback, and the existing initialization handler binds that authoritative value
+to the environment-free payload. Thus an Editor Local dropdown cannot cause an
+otherwise valid Development player to fail with `environment_mismatch`.
+Production exports neither context. The exact prior file state is restored
 after success, build failure, validation failure, or partial preparation.
 Generated Development artifacts must contain one safe current context at the
 exact WebGL-loadable `StreamingAssets/simultria-viewer-context.json` path.
+Compiled Development artifacts with a serialized `environment_id` are rejected;
+stale explicit Editor exports cannot silently override build routing.
 Production artifacts containing either context filename anywhere are rejected,
 and their contained build output is removed through Build Pipeline's safe output
 policy. The contributor claims a request only after successful inspection

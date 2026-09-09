@@ -153,7 +153,6 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ScriptableObject connection = profile.EffectiveProfileReference;
             return profile.GetInstanceID() + "|" +
                    (int)profile.EnvironmentResolutionMode + "|" +
-                   profile.BuildDirectoryEnvironmentId.Value + "|" +
                    profile.BuildProduct + "|" +
                    profile.BuildVersionOverride + "|" +
                    Application.version + "|" +

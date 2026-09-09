@@ -88,8 +88,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
             File.WriteAllText(
                 fullPath,
-                SimultriaViewerBuildTestFactory.CreateSafeContextJson(
-                    SimultriaEnvironmentIds.Local));
+                SimultriaViewerBuildTestFactory.CreateBuildContextJson());
             DeucarianBuildArtifactManifest manifest = Manifest(relative);
             var request = new DeucarianBuildRequest
             {
@@ -141,8 +140,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
             File.WriteAllText(
                 fullPath,
-                SimultriaViewerBuildTestFactory.CreateSafeContextJson(
-                    SimultriaEnvironmentIds.Local));
+                SimultriaViewerBuildTestFactory.CreateBuildContextJson());
             var request = new DeucarianBuildRequest
             {
                 Environment = DeucarianBuildEnvironment.Development,

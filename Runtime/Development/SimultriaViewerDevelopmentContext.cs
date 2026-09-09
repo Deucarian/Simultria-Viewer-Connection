@@ -27,11 +27,6 @@ namespace Deucarian.SimultriaViewerIntegration
         [SerializeField] private SimultriaViewerEnvironmentResolutionMode
             environmentResolutionMode;
         [Tooltip(
-            "API environment whose configured host exposes the public Unity " +
-            "build directory. Required for automatic resolution; no " +
-            "Production fallback is assumed.")]
-        [SerializeField] private ApiEnvironmentId buildDirectoryEnvironmentId;
-        [Tooltip(
             "Product identifier used by the Simultria Unity build directory, " +
             "for example a portal-defined viewer product key.")]
         [SerializeField] private string buildProduct = string.Empty;
@@ -83,10 +78,12 @@ namespace Deucarian.SimultriaViewerIntegration
             set => environmentResolutionMode = value;
         }
 
+        [Obsolete("Automatic lookups always use the central Production " +
+                  "directory. This legacy selection is ignored.")]
         public ApiEnvironmentId BuildDirectoryEnvironmentId
         {
-            get => buildDirectoryEnvironmentId;
-            set => buildDirectoryEnvironmentId = value;
+            get => SimultriaEnvironmentIds.Production;
+            set { }
         }
 
         public string BuildProduct
@@ -250,6 +247,35 @@ namespace Deucarian.SimultriaViewerIntegration
             out SimultriaViewerInitializationPayload payload,
             out string error)
         {
+            if (effectiveEnvironmentId.IsEmpty)
+            {
+                payload = null;
+                error = "An effective Simultria environment is required.";
+                return false;
+            }
+
+            return TryCreatePayloadCore(revision, effectiveEnvironmentId.Value,
+                out payload, out error);
+        }
+
+        /// <summary>
+        /// Build-generated context carries model selection only. The compiled
+        /// player's immutable routing gate supplies its environment at startup.
+        /// </summary>
+        internal bool TryCreateBuildPayload(
+            long revision,
+            out SimultriaViewerInitializationPayload payload,
+            out string error)
+        {
+            return TryCreatePayloadCore(revision, null, out payload, out error);
+        }
+
+        private bool TryCreatePayloadCore(
+            long revision,
+            string effectiveEnvironmentId,
+            out SimultriaViewerInitializationPayload payload,
+            out string error)
+        {
             payload = null;
             if (revision <= 0)
             {
@@ -276,12 +302,6 @@ namespace Deucarian.SimultriaViewerIntegration
                 return false;
             }
 
-            if (effectiveEnvironmentId.IsEmpty)
-            {
-                error = "An effective Simultria environment is required.";
-                return false;
-            }
-
             if (!TryParseMetadata(out JToken metadata, out error))
             {
                 return false;
@@ -290,7 +310,7 @@ namespace Deucarian.SimultriaViewerIntegration
             payload = new SimultriaViewerInitializationPayload
             {
                 Revision = revision,
-                EnvironmentId = effectiveEnvironmentId.Value,
+                EnvironmentId = effectiveEnvironmentId,
                 ProjectId = projectId,
                 ModelId = modelId,
                 ModelVersionId = modelVersionId > 0 ? (int?)modelVersionId : null,

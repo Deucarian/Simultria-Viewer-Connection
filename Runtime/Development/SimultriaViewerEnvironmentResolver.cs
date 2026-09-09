@@ -29,11 +29,12 @@ namespace Deucarian.SimultriaViewerIntegration
     /// Editor profiles may select an explicit environment. Player builds are
     /// always resolved from Application.version and the build configuration.
     /// </summary>
-    public sealed class SimultriaViewerEnvironmentResolver
+    public sealed partial class SimultriaViewerEnvironmentResolver
     {
         private readonly IApiClient apiClient;
         private readonly ISimultriaViewerBuildMetadataProvider metadataProvider;
         private readonly ISimultriaViewerRuntimeContext runtimeContext;
+        private readonly ApiEnvironmentId buildProfileEnvironmentId;
 
         public SimultriaViewerEnvironmentResolver(
             IApiClient apiClient,
@@ -50,23 +51,42 @@ namespace Deucarian.SimultriaViewerIntegration
             IApiClient apiClient,
             ISimultriaViewerBuildMetadataProvider metadataProvider,
             ISimultriaViewerRuntimeContext runtimeContext)
+            : this(apiClient, metadataProvider, runtimeContext,
+                default(ApiEnvironmentId))
+        {
+        }
+
+        public SimultriaViewerEnvironmentResolver(
+            IApiClient apiClient,
+            ISimultriaViewerBuildMetadataProvider metadataProvider,
+            ISimultriaViewerRuntimeContext runtimeContext,
+            ApiEnvironmentId buildProfileEnvironmentId)
         {
             this.apiClient = apiClient;
             this.metadataProvider = metadataProvider ??
                 throw new ArgumentNullException(nameof(metadataProvider));
             this.runtimeContext = runtimeContext ??
                 throw new ArgumentNullException(nameof(runtimeContext));
+            this.buildProfileEnvironmentId = buildProfileEnvironmentId;
         }
 
         /// <summary>Creates the normal Unity-backed resolver.</summary>
         public static SimultriaViewerEnvironmentResolver CreateDefault()
+        {
+            return CreateDefault(default(ApiEnvironmentId));
+        }
+
+        /// <summary>Uses the environment captured into the built scene.</summary>
+        public static SimultriaViewerEnvironmentResolver CreateDefault(
+            ApiEnvironmentId buildProfileEnvironmentId)
         {
             var application =
                 new SimultriaViewerApplicationBuildMetadataProvider();
             return new SimultriaViewerEnvironmentResolver(
                 ApiClientFactory.CreateDefault(),
                 application,
-                application);
+                application,
+                buildProfileEnvironmentId);
         }
 
         /// <summary>
@@ -223,7 +243,6 @@ namespace Deucarian.SimultriaViewerIntegration
 
             return ResolveAutomaticAsync(
                 composition,
-                profile.BuildDirectoryEnvironmentId,
                 CurrentBuildVersion(),
                 profile.BuildProduct,
                 false,
@@ -264,7 +283,6 @@ namespace Deucarian.SimultriaViewerIntegration
 
             return ResolveAutomaticAsync(
                 composition,
-                configuration.BuildDirectoryEnvironmentId,
                 CurrentBuildVersion(),
                 configuration.Product,
                 false,
@@ -332,56 +350,12 @@ namespace Deucarian.SimultriaViewerIntegration
 
             return ResolveAutomaticAsync(
                 composition,
-                profile.BuildDirectoryEnvironmentId,
                 ResolveEditorBuildVersion(profile),
                 profile.BuildProduct,
                 false,
                 cancellationToken);
         }
 #endif
-
-        private async Task<SimultriaViewerEnvironmentResolution>
-            ResolveAutomaticAsync(
-                ApiComposition composition,
-                ApiEnvironmentId directoryEnvironment,
-                string buildVersion,
-                string productValue,
-                bool editorOverrideActive,
-                CancellationToken cancellationToken)
-        {
-            const SimultriaViewerEnvironmentResolutionMode mode =
-                SimultriaViewerEnvironmentResolutionMode
-                    .AutomaticFromUnityBuildVersion;
-            SimultriaUnityBuildRoutingResult routing =
-                await new SimultriaUnityBuildRoutingService(
-                        apiClient,
-                        composition,
-                        directoryEnvironment)
-                    .ResolveAsync(
-                        buildVersion,
-                        productValue,
-                        cancellationToken);
-            if (!routing.Succeeded)
-            {
-                return Failure(
-                    mode,
-                    routing.BuildVersion,
-                    routing.Product,
-                    routing.ErrorCode,
-                    routing.Message,
-                    editorOverrideActive);
-            }
-
-            return SimultriaViewerEnvironmentResolution.Success(
-                mode,
-                routing.EnvironmentId,
-                routing.BuildVersion,
-                routing.Product,
-                "Simultria Unity build directory",
-                RuntimeKind(),
-                ApplicationName(),
-                editorOverrideActive);
-        }
 
 #if UNITY_EDITOR
         private string ResolveEditorBuildVersion(

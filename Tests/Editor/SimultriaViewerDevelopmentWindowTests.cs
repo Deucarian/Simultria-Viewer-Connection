@@ -272,6 +272,25 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(values[selectedIndex], Is.EqualTo(custom));
         }
 
+        [Test]
+        public void EnvironmentOptionsDoNotShareMutableArraysBetweenWindows()
+        {
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                SimultriaEnvironmentIds.Local, out string[] firstLabels,
+                out ApiEnvironmentId[] firstValues, out _);
+            firstLabels[0] = "Changed by one window";
+            firstValues[0] = new ApiEnvironmentId("simultria.custom");
+
+            SimultriaViewerEnvironmentOptions.BuildEnvironmentOptions(
+                SimultriaEnvironmentIds.Local, out string[] secondLabels,
+                out ApiEnvironmentId[] secondValues, out int selectedIndex);
+
+            Assert.That(secondLabels, Is.Not.SameAs(firstLabels));
+            Assert.That(secondValues, Is.Not.SameAs(firstValues));
+            Assert.That(secondLabels[selectedIndex], Is.EqualTo("Local"));
+            Assert.That(secondValues[selectedIndex], Is.EqualTo(SimultriaEnvironmentIds.Local));
+        }
+
         private static void AssertBuiltInEnvironmentSelection(
             ApiEnvironmentId environmentId,
             string expectedLabel)
