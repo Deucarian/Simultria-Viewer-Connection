@@ -42,7 +42,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         private static void DrawEnvironmentSelection(
             SimultriaViewerDevelopmentContext profile)
         {
-            EditorGUILayout.LabelField(
+            DeucarianEditorTextGUI.LabelField(
                 "Version directory", "Central Production (fixed)");
             if (profile.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode.Manual)
@@ -59,21 +59,21 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     out string resolutionMessage);
             if (resolved)
             {
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(
                     "Environment",
                     environmentId.Value);
             }
             else
             {
-                EditorGUILayout.HelpBox(
+                DeucarianEditorTextGUI.HelpBox(
                     resolutionMessage ??
                     "The automatic environment has not resolved yet.",
                     MessageType.Info);
             }
 
-            EditorGUILayout.LabelField(
+            DeucarianEditorTextGUI.LabelField(
                 "Automatic routing details are edited on the context asset.",
-                EditorStyles.wordWrappedMiniLabel);
+                DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
         }
 
         private static void DrawManualEnvironmentChooser(
@@ -87,7 +87,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 out ApiEnvironmentId[] values,
                 out int currentIndex);
 
-            int selected = EditorGUILayout.Popup("Environment", currentIndex, options);
+            int selected = DeucarianEditorInputGUI.Popup("Environment", currentIndex, options);
             if (selected == currentIndex)
             {
                 return;
