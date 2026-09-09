@@ -181,55 +181,17 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ApiEnvironmentId current,
             out string[] options,
             out ApiEnvironmentId[] values,
-            out int selectedIndex)
-        {
-            ApiEnvironmentId fallbackCurrent = current.IsEmpty
-                ? SimultriaEnvironmentIds.Development
-                : current;
-            var optionLabels = new List<string>();
-            var optionValues = new List<ApiEnvironmentId>();
-            foreach (var descriptor in SimultriaEnvironmentDescriptors.All)
-            {
-                ApiEnvironmentId environmentId = descriptor.EnvironmentId;
-                if (environmentId.IsEmpty)
-                {
-                    continue;
-                }
-
-                optionLabels.Add(descriptor.DisplayName);
-                optionValues.Add(environmentId);
-            }
-
-            selectedIndex = FindOptionIndex(optionValues, fallbackCurrent);
-            if (selectedIndex < 0 && !current.IsEmpty)
-            {
-                selectedIndex = optionLabels.Count;
-                optionLabels.Add($"Custom ({current.Value})");
-                optionValues.Add(current);
-            }
-
-            options = optionLabels.ToArray();
-            values = optionValues.ToArray();
-        }
+            out int selectedIndex) =>
+            SimultriaViewerEnvironmentOptions.BuildEnvironmentOptions(
+                current, out options, out values, out selectedIndex);
 
         internal static void BuildDirectoryEnvironmentOptions(
             ApiEnvironmentId current,
             out string[] options,
             out ApiEnvironmentId[] values,
-            out int selectedIndex)
-        {
-            BuildEnvironmentOptions(
-                current,
-                out string[] canonicalLabels,
-                out ApiEnvironmentId[] canonicalValues,
-                out int canonicalIndex);
-            options = new string[canonicalLabels.Length + 1];
-            values = new ApiEnvironmentId[canonicalValues.Length + 1];
-            options[0] = "Choose configured environment...";
-            Array.Copy(canonicalLabels, 0, options, 1, canonicalLabels.Length);
-            Array.Copy(canonicalValues, 0, values, 1, canonicalValues.Length);
-            selectedIndex = current.IsEmpty ? 0 : canonicalIndex + 1;
-        }
+            out int selectedIndex) =>
+            SimultriaViewerEnvironmentOptions.BuildDirectoryEnvironmentOptions(
+                current, out options, out values, out selectedIndex);
 
         private static void SaveProfileAndRefresh(
             SimultriaViewerDevelopmentContext profile)
@@ -261,23 +223,5 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             Repaint();
         }
 
-        private static int FindOptionIndex(
-            List<ApiEnvironmentId> optionValues,
-            ApiEnvironmentId selected)
-        {
-            string selectedValue = selected.Value;
-            for (int i = 0; i < optionValues.Count; i++)
-            {
-                if (string.Equals(
-                        optionValues[i].Value,
-                        selectedValue,
-                        StringComparison.Ordinal))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
     }
 }

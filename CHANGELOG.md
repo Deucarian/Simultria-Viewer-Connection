@@ -8,6 +8,9 @@
   instead of allowing the other 1.1.0 contract introduced on develop.
 - Preserve exact version lookup, explicit missing-record fallback, immutable
   environment activation, and connection startup status without runtime changes.
+- Separate pure environment-option construction from the stateful development
+  window, preserving its compatibility methods and fixed-directory label while
+  reducing the window's responsibility size under the shared architecture gate.
 
 ## [1.2.1] - 2026-09-08
 
