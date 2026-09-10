@@ -34,6 +34,10 @@ namespace Deucarian.SimultriaViewerIntegration
             "Optional local/editor override. Leave blank to use " +
             "Application.version at runtime.")]
         [SerializeField] private string buildVersionOverride = string.Empty;
+        [Tooltip("Automatic Editor lookup only: where to find the exact " +
+                 "version record, not the runtime backend assigned to it. " +
+                 "Player builds use their build configuration instead.")]
+        [SerializeField] private SimultriaUnityBuildLookupEnvironment lookupEnvironment;
         [Tooltip(
             "Project-owned generic API connection. Hosts remain editable " +
             "in that asset and are never stored in this development context.")]
@@ -78,8 +82,14 @@ namespace Deucarian.SimultriaViewerIntegration
             set => environmentResolutionMode = value;
         }
 
-        [Obsolete("Automatic lookups always use the central Production " +
-                  "directory. This legacy selection is ignored.")]
+        public SimultriaUnityBuildLookupEnvironment LookupEnvironment
+        {
+            get => lookupEnvironment;
+            set => lookupEnvironment = value;
+        }
+
+        [Obsolete("This legacy runtime-environment selection is ignored. " +
+                  "Use the separate LookupEnvironment property.")]
         public ApiEnvironmentId BuildDirectoryEnvironmentId
         {
             get => SimultriaEnvironmentIds.Production;

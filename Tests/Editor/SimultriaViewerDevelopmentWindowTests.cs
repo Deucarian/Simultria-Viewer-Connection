@@ -9,6 +9,29 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
     public sealed class SimultriaViewerDevelopmentWindowTests
     {
         [Test]
+        public void LookupOptionsAreDistinctFromRuntimeEnvironmentOptions()
+        {
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                SimultriaUnityBuildLookupEnvironment.Production,
+                out string[] labels, out var values, out int selected);
+            Assert.That(labels, Is.EqualTo(new[] { "Production", "Development" }));
+            Assert.That(values[selected], Is.EqualTo(SimultriaUnityBuildLookupEnvironment.Production));
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                SimultriaUnityBuildLookupEnvironment.Development, out _, out values, out selected);
+            Assert.That(values[selected], Is.EqualTo(SimultriaUnityBuildLookupEnvironment.Development));
+        }
+
+        [Test]
+        public void InvalidLookupRemainsVisibleInsteadOfSilentlySelectingProduction()
+        {
+            var invalid = (SimultriaUnityBuildLookupEnvironment)99;
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                invalid, out string[] labels, out var values, out int selected);
+            Assert.That(labels[selected], Is.EqualTo("Unsupported lookup environment"));
+            Assert.That(values[selected], Is.EqualTo(invalid));
+        }
+
+        [Test]
         public void WindowUsesCompactMinimumSize()
         {
             Assert.That(

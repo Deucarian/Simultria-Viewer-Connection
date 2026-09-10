@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0] - 2026-09-10
+
+### Added
+
+- Separate Production/Development version lookup selection on player build
+  configurations and automatic Editor contexts, using Simultria API 1.2.0.
+- Show a distinct Lookup environment dropdown; runtime environment still comes
+  from the exact product/version record, not the lookup choice.
+- Preserve Production defaults for existing assets, ignore obsolete Local
+  directory fields, validate unsupported selections before network/build work,
+  and invalidate cached Editor routing when the lookup selection changes.
+- Retain strict identity checks, credential-free lookup, captured build-profile
+  fallback only on typed missing records, and environment-free build context export.
+
 ## [1.2.4] - 2026-09-09
 
 ### Changed

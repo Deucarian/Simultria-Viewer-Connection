@@ -7,9 +7,30 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 {
     // Pure option construction belongs outside the stateful development window.
     // The legacy directory option adapter is retained for compatibility only;
-    // it does not select or configure the fixed Production lookup endpoint.
+    // it does not select or configure the separate lookup endpoint.
     internal static class SimultriaViewerEnvironmentOptions
     {
+        internal static void BuildLookupEnvironmentOptions(
+            SimultriaUnityBuildLookupEnvironment current,
+            out string[] options,
+            out SimultriaUnityBuildLookupEnvironment[] values,
+            out int selectedIndex)
+        {
+            options = new[] { "Production", "Development" };
+            values = new[] { SimultriaUnityBuildLookupEnvironment.Production,
+                             SimultriaUnityBuildLookupEnvironment.Development };
+            selectedIndex = Array.IndexOf(values, current);
+            if (selectedIndex >= 0)
+                return;
+
+            // Display an invalid serialized value without silently changing it.
+            Array.Resize(ref options, 3);
+            Array.Resize(ref values, 3);
+            selectedIndex = 2;
+            options[selectedIndex] = "Unsupported lookup environment";
+            values[selectedIndex] = current;
+        }
+
         internal static void BuildEnvironmentOptions(
             ApiEnvironmentId current,
             out string[] options,

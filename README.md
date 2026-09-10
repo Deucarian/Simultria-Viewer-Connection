@@ -29,19 +29,26 @@ Install the stable package branch in a Simultria-backed viewer:
 ```
 
 Required package versions are declared in `package.json`, including API 2.0.2,
-Simultria API 1.1.1, Command Routing 0.2.5, Authentication 1.0.2, and Logging 1.0.4.
-Connection 1.2.3 declares the reconciled API 1.1.1 baseline instead of the
-ambiguous 1.1.0 release for its central-directory lookup contract.
-This dependency correction does not change Connection's exact-version,
-missing-record fallback, or startup-status policy.
+Simultria API 1.2.0, Editor 1.7.0, Command Routing 0.2.5, Authentication 1.0.2,
+and Logging 1.0.4. Connection 1.3.0 adds explicit lookup selection while
+preserving exact-version, missing-record fallback, and startup-status policy.
 
 ## Player build configuration
 
 Player builds use `SimultriaViewerBuildConfiguration`, not a development
-profile. This asset contains only the project-owned runtime API connection and
-canonical backend product. The central Production directory is fixed by
-Simultria API, separately from every runtime backend address. Legacy serialized
-directory selections are ignored and no longer appear in the Inspector.
+profile. This asset contains the project-owned runtime API connection,
+canonical backend product, and a separate **Lookup Environment** enum dropdown.
+Select **Production** (the default) or **Development** to choose where to look
+up the exact version record. Simultria API owns these public directory addresses;
+runtime backend URLs never redirect lookup. The record, not this dropdown,
+still chooses the runtime environment. A Production-built player can explicitly
+look up Development and receive a Production runtime record, or vice versa.
+
+Existing assets default to Production. The new `lookupEnvironment` field does
+not migrate the obsolete `buildDirectoryEnvironmentId` field: old Local values
+remain ignored. Unsupported enum values fail closed instead of guessing a host.
+Changing the player selection requires rebuilding; no host command or runtime
+admin dropdown can mutate an active player's lookup/routing decision.
 
 At startup the resolver sends the compiled `Application.version` and product
 to `GET /api/v2/unity/builds/versions/{version}/{product}`. It verifies that
@@ -112,8 +119,8 @@ The context stores only:
 - an explicit Manual or Automatic-from-Unity-build-version mode;
 - a manual `ApiEnvironmentId` and a project-owned generic
   `ApiConnectionSettings` reference;
-- for automatic mode only, the portal product ID and an optional local/editor
-  build-version override; the directory itself is fixed;
+- for automatic mode only, the portal product ID, an optional local/editor
+  build-version override, and its own Production/Development lookup selection;
 - project, model, and optional model-version IDs;
 - placement position, rotation, and scale;
 - the development-only force-show option; and
@@ -135,8 +142,12 @@ unconfigured until a developer supplies a host in project-owned settings.
 Editor Automatic mode uses `Application.version` unless the profile supplies an
 explicit local override. Player builds always use `Application.version` from
 the build configuration. Both call the public Simultria route
-`GET /api/v2/unity/builds/versions/{id}/{product}` at Simultria API's fixed central
-Production directory. The backend response is the normal build-to-environment
+`GET /api/v2/unity/builds/versions/{id}/{product}` at the explicitly selected
+Simultria API directory. Automatic Editor profiles use their own **Lookup
+environment** dropdown; players use only their build configuration's selection.
+Neither inherits the manual runtime environment or Unity build profile. A lookup
+change invalidates cached Editor routing and rejects stale request completion.
+The backend response is the normal build-to-environment
 mapping; only a player with an explicitly missing record may use its captured
 profile environment. This package stores no build-to-environment table.
 
@@ -447,11 +458,12 @@ Build Pipeline 0.6.0 automatically discovers
 `SimultriaViewerBuildLifecycleContributor` when the selected scene contains a
 `SimultriaViewerBuildConnectionGate`. Validation requires one gate and build
 configuration, one or more feature connection sources bound to the same
-settings and every remote promotable environment. The fixed directory no longer
-requires a configured runtime-environment slot. Development additionally requires
+settings and every remote promotable environment. The selected public directory
+requires a supported lookup enum, not a configured runtime-environment slot.
+Development additionally requires
 a selected, valid model/project context referencing the same connection settings.
 Either Manual or Automatic Editor profiles can provide that context; their
-environment dropdown and version overrides do not participate in a build.
+runtime/lookup dropdowns and version overrides do not participate in a build.
 
 Preparation snapshots and removes the current and legacy context files and
 their metadata. Development exports only the selected credential-free current

@@ -42,8 +42,6 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         private static void DrawEnvironmentSelection(
             SimultriaViewerDevelopmentContext profile)
         {
-            DeucarianEditorTextGUI.LabelField(
-                "Version directory", "Central Production (fixed)");
             if (profile.EnvironmentResolutionMode ==
                 SimultriaViewerEnvironmentResolutionMode.Manual)
             {
@@ -51,6 +49,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 return;
             }
 
+            DrawLookupEnvironmentChooser(profile);
             bool resolved = SimultriaViewerEditorAuthenticationHost
                 .TryGetEffectiveEnvironment(
                     profile,
@@ -60,7 +59,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             if (resolved)
             {
                 DeucarianEditorTextGUI.LabelField(
-                    "Environment",
+                    "Runtime environment",
                     environmentId.Value);
             }
             else
@@ -73,6 +72,26 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
             DeucarianEditorTextGUI.LabelField(
                 "Automatic routing details are edited on the context asset.",
+                DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
+        }
+
+        private static void DrawLookupEnvironmentChooser(
+            SimultriaViewerDevelopmentContext profile)
+        {
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                profile.LookupEnvironment, out string[] labels,
+                out SimultriaUnityBuildLookupEnvironment[] values, out int currentIndex);
+            int selected = DeucarianEditorInputGUI.Popup(
+                "Lookup environment", currentIndex, labels);
+            if (selected >= 0 && selected < values.Length && selected != currentIndex)
+            {
+                Undo.RecordObject(profile, "Change version lookup environment");
+                profile.LookupEnvironment = values[selected];
+                SaveProfileAndRefresh(profile);
+            }
+
+            DeucarianEditorTextGUI.LabelField(
+                "Version records choose the runtime backend. This selects only the directory.",
                 DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
         }
 

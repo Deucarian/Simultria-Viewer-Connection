@@ -245,6 +245,7 @@ namespace Deucarian.SimultriaViewerIntegration
                 composition,
                 CurrentBuildVersion(),
                 profile.BuildProduct,
+                SimultriaUnityBuildLookupEnvironment.Production,
                 false,
                 cancellationToken);
         }
@@ -285,6 +286,7 @@ namespace Deucarian.SimultriaViewerIntegration
                 composition,
                 CurrentBuildVersion(),
                 configuration.Product,
+                configuration.LookupEnvironment,
                 false,
                 cancellationToken);
         }
@@ -352,6 +354,7 @@ namespace Deucarian.SimultriaViewerIntegration
                 composition,
                 ResolveEditorBuildVersion(profile),
                 profile.BuildProduct,
+                profile.LookupEnvironment,
                 false,
                 cancellationToken);
         }
