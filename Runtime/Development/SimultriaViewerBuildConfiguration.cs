@@ -19,12 +19,21 @@ namespace Deucarian.SimultriaViewerIntegration
     {
         [Tooltip(
             "Project-owned API connection containing runtime backend " +
-            "environments. Version lookup always uses central Production.")]
+            "environments. Version lookup has its own separate selection.")]
         [SerializeField] private ApiConnectionSettings connectionSettings;
         [Tooltip(
             "Canonical backend product identifier, for example " +
             "design_and_sales or holo_helmet.")]
         [SerializeField] private string product = string.Empty;
+        [Tooltip("Where to look up the exact product/version record. This does " +
+                 "not choose the runtime backend returned by that record.")]
+        [SerializeField] private SimultriaUnityBuildLookupEnvironment lookupEnvironment;
+
+        public SimultriaUnityBuildLookupEnvironment LookupEnvironment
+        {
+            get => lookupEnvironment;
+            set => lookupEnvironment = value;
+        }
 
         public ApiConnectionSettings ConnectionSettings
         {
@@ -32,8 +41,8 @@ namespace Deucarian.SimultriaViewerIntegration
             set => connectionSettings = value;
         }
 
-        [Obsolete("The Unity build directory is fixed on central Production. " +
-                  "This legacy selection is ignored.")]
+        [Obsolete("This legacy runtime-environment selection is ignored. " +
+                  "Use the separate LookupEnvironment property.")]
         public ApiEnvironmentId BuildDirectoryEnvironmentId
         {
             get => SimultriaEnvironmentIds.Production;

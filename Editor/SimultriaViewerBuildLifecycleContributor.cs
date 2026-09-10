@@ -177,6 +177,13 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             SimultriaViewerBuildConfiguration configuration,
             DeucarianBuildValidationResult result)
         {
+            if (!SimultriaUnityBuildDirectory.TryGetBaseUrl(
+                    configuration.LookupEnvironment, out _))
+            {
+                result.Add("Choose a supported version lookup environment " +
+                           "in the Simultria viewer build configuration.");
+            }
+
             if (string.IsNullOrWhiteSpace(configuration.Product))
             {
                 result.Add(

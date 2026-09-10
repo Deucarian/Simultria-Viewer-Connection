@@ -23,6 +23,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             // not use this dropdown, Editor product, or Editor version override.
             profile.BuildProduct = "editor-only-product";
             profile.BuildVersionOverride = "editor-only-version";
+            profile.LookupEnvironment = SimultriaUnityBuildLookupEnvironment.Development;
 
             Assert.That(SimultriaViewerWebGlDevelopmentExporter.TryCreateBuildCommand(
                 profile, out var command, out string error), Is.True, error);
@@ -31,6 +32,8 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(json, Does.Not.Contain("environment_id"));
             Assert.That(json, Does.Not.Contain("simultria.local"));
             Assert.That(json, Does.Not.Contain("editor-only"));
+            Assert.That(json, Does.Not.Contain("lookupEnvironment"));
+            Assert.That(json, Does.Not.Contain("lookup_environment"));
             Assert.That(command.TryReadPayload(out SimultriaViewerInitializationPayload payload,
                 out _), Is.True);
             Assert.That(payload.ProjectId, Is.EqualTo(profile.ProjectId));

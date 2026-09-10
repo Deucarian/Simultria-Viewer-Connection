@@ -14,14 +14,23 @@ namespace Deucarian.SimultriaViewerIntegration
                 ApiComposition composition,
                 string buildVersion,
                 string productValue,
+                SimultriaUnityBuildLookupEnvironment lookupEnvironment,
                 bool editorOverrideActive,
                 CancellationToken cancellationToken)
         {
             const SimultriaViewerEnvironmentResolutionMode mode =
                 SimultriaViewerEnvironmentResolutionMode
                     .AutomaticFromUnityBuildVersion;
+            if (!SimultriaUnityBuildDirectory.TryGetBaseUrl(lookupEnvironment, out _))
+            {
+                return Failure(mode, buildVersion, productValue,
+                    "build_lookup_environment_invalid",
+                    "Choose a supported version lookup environment.", editorOverrideActive);
+            }
+
             SimultriaUnityBuildRoutingResult routing =
-                await new SimultriaUnityBuildRoutingService(apiClient, composition)
+                await new SimultriaUnityBuildRoutingService(
+                        apiClient, lookupEnvironment, composition)
                     .ResolveAsync(buildVersion, productValue, cancellationToken);
             if (!routing.Succeeded)
             {
@@ -36,7 +45,7 @@ namespace Deucarian.SimultriaViewerIntegration
 
             return SimultriaViewerEnvironmentResolution.Success(
                 mode, routing.EnvironmentId, routing.BuildVersion, routing.Product,
-                "Central Production Unity build directory", RuntimeKind(),
+                "Central " + lookupEnvironment + " Unity build directory", RuntimeKind(),
                 ApplicationName(), editorOverrideActive);
         }
 

@@ -356,6 +356,25 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(result.IsValid, Is.True, result.Format("build context"));
         }
 
+        [TestCase(0, true)]
+        [TestCase(1, true)]
+        [TestCase(-1, false)]
+        [TestCase(99, false)]
+        public void ValidatesLookupSelectionIndependentlyOfBuildEnvironment(int lookup, bool valid)
+        {
+            var connection = CreateConnection();
+            var configuration = SimultriaViewerBuildTestFactory.CreateConfiguration(ownedObjects, connection);
+            configuration.LookupEnvironment = (SimultriaUnityBuildLookupEnvironment)lookup;
+            var result = CreateContributor(Snapshot(configuration, connection), null)
+                .ValidateBeforeBuild(new DeucarianBuildRequest
+                {
+                    Environment = DeucarianBuildEnvironment.Production
+                });
+            Assert.That(result.IsValid, Is.EqualTo(valid), result.Format("lookup"));
+            if (!valid)
+                Assert.That(result.Issues, Has.Some.Contains("version lookup environment"));
+        }
+
         private ApiConnectionSettings CreateConnection() =>
             SimultriaViewerBuildTestFactory.CreateConnection(ownedObjects);
 
