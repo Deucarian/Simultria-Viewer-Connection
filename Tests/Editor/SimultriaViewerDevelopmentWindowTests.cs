@@ -9,6 +9,29 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
     public sealed class SimultriaViewerDevelopmentWindowTests
     {
         [Test]
+        public void LookupOptionsAreDistinctFromRuntimeEnvironmentOptions()
+        {
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                SimultriaUnityBuildLookupEnvironment.Production,
+                out string[] labels, out var values, out int selected);
+            Assert.That(labels, Is.EqualTo(new[] { "Production", "Development" }));
+            Assert.That(values[selected], Is.EqualTo(SimultriaUnityBuildLookupEnvironment.Production));
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                SimultriaUnityBuildLookupEnvironment.Development, out _, out values, out selected);
+            Assert.That(values[selected], Is.EqualTo(SimultriaUnityBuildLookupEnvironment.Development));
+        }
+
+        [Test]
+        public void InvalidLookupRemainsVisibleInsteadOfSilentlySelectingProduction()
+        {
+            var invalid = (SimultriaUnityBuildLookupEnvironment)99;
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                invalid, out string[] labels, out var values, out int selected);
+            Assert.That(labels[selected], Is.EqualTo("Unsupported lookup environment"));
+            Assert.That(values[selected], Is.EqualTo(invalid));
+        }
+
+        [Test]
         public void WindowUsesCompactMinimumSize()
         {
             Assert.That(
@@ -270,6 +293,25 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 options[selectedIndex],
                 Is.EqualTo($"Custom ({custom.Value})"));
             Assert.That(values[selectedIndex], Is.EqualTo(custom));
+        }
+
+        [Test]
+        public void EnvironmentOptionsDoNotShareMutableArraysBetweenWindows()
+        {
+            SimultriaViewerDevelopmentWindow.BuildEnvironmentOptions(
+                SimultriaEnvironmentIds.Local, out string[] firstLabels,
+                out ApiEnvironmentId[] firstValues, out _);
+            firstLabels[0] = "Changed by one window";
+            firstValues[0] = new ApiEnvironmentId("simultria.custom");
+
+            SimultriaViewerEnvironmentOptions.BuildEnvironmentOptions(
+                SimultriaEnvironmentIds.Local, out string[] secondLabels,
+                out ApiEnvironmentId[] secondValues, out int selectedIndex);
+
+            Assert.That(secondLabels, Is.Not.SameAs(firstLabels));
+            Assert.That(secondValues, Is.Not.SameAs(firstValues));
+            Assert.That(secondLabels[selectedIndex], Is.EqualTo("Local"));
+            Assert.That(secondValues[selectedIndex], Is.EqualTo(SimultriaEnvironmentIds.Local));
         }
 
         private static void AssertBuiltInEnvironmentSelection(

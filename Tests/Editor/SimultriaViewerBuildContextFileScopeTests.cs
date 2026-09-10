@@ -148,7 +148,6 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             var preparation = new SimultriaViewerBuildContextPreparation(
                 () => CreateScope(() => { }),
                 (SimultriaViewerDevelopmentContext profile,
-                 ApiEnvironmentId environment,
                  out string message) =>
                 {
                     File.WriteAllText(current, "partial");
@@ -160,8 +159,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.Throws<BuildFailedException>(() =>
                 preparation.Prepare(
                     DeucarianBuildEnvironment.Development,
-                    context,
-                    SimultriaEnvironmentIds.Local));
+                    context));
             Assert.That(File.ReadAllText(current), Is.EqualTo("original"));
             Assert.That(
                 File.ReadAllText(currentMeta),
@@ -184,21 +182,20 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             var preparation = new SimultriaViewerBuildContextPreparation(
                 () => CreateScope(() => { }),
                 (SimultriaViewerDevelopmentContext profile,
-                 ApiEnvironmentId environment,
                  out string message) =>
                 {
+                    Assert.That(SimultriaViewerWebGlDevelopmentExporter.TryCreateBuildCommand(
+                        profile, out var command, out message), Is.True, message);
                     File.WriteAllText(
                         current,
-                        SimultriaViewerBuildTestFactory.CreateSafeContextJson(
-                            environment));
+                        SimultriaViewerInitializationCommand.Serialize(command));
                     message = string.Empty;
                     return true;
                 });
 
             IDisposable scope = preparation.Prepare(
                 DeucarianBuildEnvironment.Development,
-                context,
-                SimultriaEnvironmentIds.Local);
+                context);
             Assert.That(File.Exists(current), Is.True);
             Assert.That(
                 SimultriaViewerBuildContextValidator.TryValidateFile(
@@ -226,7 +223,6 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             var preparation = new SimultriaViewerBuildContextPreparation(
                 () => CreateScope(() => { }),
                 (SimultriaViewerDevelopmentContext profile,
-                 ApiEnvironmentId environment,
                  out string message) =>
                 {
                     exporterCalled = true;
@@ -236,8 +232,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
 
             IDisposable scope = preparation.Prepare(
                 DeucarianBuildEnvironment.Production,
-                null,
-                default);
+                null);
 
             Assert.That(exporterCalled, Is.False);
             Assert.That(File.Exists(current), Is.False);

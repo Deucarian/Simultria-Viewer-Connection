@@ -49,6 +49,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 return;
             }
 
+            DrawLookupEnvironmentChooser(profile);
             bool resolved = SimultriaViewerEditorAuthenticationHost
                 .TryGetEffectiveEnvironment(
                     profile,
@@ -57,21 +58,41 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     out string resolutionMessage);
             if (resolved)
             {
-                EditorGUILayout.LabelField(
-                    "Environment",
+                DeucarianEditorTextGUI.LabelField(
+                    "Runtime environment",
                     environmentId.Value);
             }
             else
             {
-                EditorGUILayout.HelpBox(
+                DeucarianEditorTextGUI.HelpBox(
                     resolutionMessage ??
                     "The automatic environment has not resolved yet.",
                     MessageType.Info);
             }
 
-            EditorGUILayout.LabelField(
+            DeucarianEditorTextGUI.LabelField(
                 "Automatic routing details are edited on the context asset.",
-                EditorStyles.wordWrappedMiniLabel);
+                DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
+        }
+
+        private static void DrawLookupEnvironmentChooser(
+            SimultriaViewerDevelopmentContext profile)
+        {
+            SimultriaViewerEnvironmentOptions.BuildLookupEnvironmentOptions(
+                profile.LookupEnvironment, out string[] labels,
+                out SimultriaUnityBuildLookupEnvironment[] values, out int currentIndex);
+            int selected = DeucarianEditorInputGUI.Popup(
+                "Lookup environment", currentIndex, labels);
+            if (selected >= 0 && selected < values.Length && selected != currentIndex)
+            {
+                Undo.RecordObject(profile, "Change version lookup environment");
+                profile.LookupEnvironment = values[selected];
+                SaveProfileAndRefresh(profile);
+            }
+
+            DeucarianEditorTextGUI.LabelField(
+                "Version records choose the runtime backend. This selects only the directory.",
+                DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
         }
 
         private static void DrawManualEnvironmentChooser(
@@ -85,7 +106,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 out ApiEnvironmentId[] values,
                 out int currentIndex);
 
-            int selected = EditorGUILayout.Popup("Environment", currentIndex, options);
+            int selected = DeucarianEditorInputGUI.Popup("Environment", currentIndex, options);
             if (selected == currentIndex)
             {
                 return;
@@ -179,55 +200,17 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ApiEnvironmentId current,
             out string[] options,
             out ApiEnvironmentId[] values,
-            out int selectedIndex)
-        {
-            ApiEnvironmentId fallbackCurrent = current.IsEmpty
-                ? SimultriaEnvironmentIds.Development
-                : current;
-            var optionLabels = new List<string>();
-            var optionValues = new List<ApiEnvironmentId>();
-            foreach (var descriptor in SimultriaEnvironmentDescriptors.All)
-            {
-                ApiEnvironmentId environmentId = descriptor.EnvironmentId;
-                if (environmentId.IsEmpty)
-                {
-                    continue;
-                }
-
-                optionLabels.Add(descriptor.DisplayName);
-                optionValues.Add(environmentId);
-            }
-
-            selectedIndex = FindOptionIndex(optionValues, fallbackCurrent);
-            if (selectedIndex < 0 && !current.IsEmpty)
-            {
-                selectedIndex = optionLabels.Count;
-                optionLabels.Add($"Custom ({current.Value})");
-                optionValues.Add(current);
-            }
-
-            options = optionLabels.ToArray();
-            values = optionValues.ToArray();
-        }
+            out int selectedIndex) =>
+            SimultriaViewerEnvironmentOptions.BuildEnvironmentOptions(
+                current, out options, out values, out selectedIndex);
 
         internal static void BuildDirectoryEnvironmentOptions(
             ApiEnvironmentId current,
             out string[] options,
             out ApiEnvironmentId[] values,
-            out int selectedIndex)
-        {
-            BuildEnvironmentOptions(
-                current,
-                out string[] canonicalLabels,
-                out ApiEnvironmentId[] canonicalValues,
-                out int canonicalIndex);
-            options = new string[canonicalLabels.Length + 1];
-            values = new ApiEnvironmentId[canonicalValues.Length + 1];
-            options[0] = "Choose configured environment...";
-            Array.Copy(canonicalLabels, 0, options, 1, canonicalLabels.Length);
-            Array.Copy(canonicalValues, 0, values, 1, canonicalValues.Length);
-            selectedIndex = current.IsEmpty ? 0 : canonicalIndex + 1;
-        }
+            out int selectedIndex) =>
+            SimultriaViewerEnvironmentOptions.BuildDirectoryEnvironmentOptions(
+                current, out options, out values, out selectedIndex);
 
         private static void SaveProfileAndRefresh(
             SimultriaViewerDevelopmentContext profile)
@@ -259,23 +242,5 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             Repaint();
         }
 
-        private static int FindOptionIndex(
-            List<ApiEnvironmentId> optionValues,
-            ApiEnvironmentId selected)
-        {
-            string selectedValue = selected.Value;
-            for (int i = 0; i < optionValues.Count; i++)
-            {
-                if (string.Equals(
-                        optionValues[i].Value,
-                        selectedValue,
-                        StringComparison.Ordinal))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
     }
 }

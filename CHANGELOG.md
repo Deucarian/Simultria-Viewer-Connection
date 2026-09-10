@@ -1,5 +1,83 @@
 # Changelog
 
+## [1.3.0] - 2026-09-10
+
+### Added
+
+- Separate Production/Development version lookup selection on player build
+  configurations and automatic Editor contexts, using Simultria API 1.2.0.
+- Show a distinct Lookup environment dropdown; runtime environment still comes
+  from the exact product/version record, not the lookup choice.
+- Preserve Production defaults for existing assets, ignore obsolete Local
+  directory fields, validate unsupported selections before network/build work,
+  and invalidate cached Editor routing when the lookup selection changes.
+- Retain strict identity checks, credential-free lookup, captured build-profile
+  fallback only on typed missing records, and environment-free build context export.
+
+## [1.2.4] - 2026-09-09
+
+### Changed
+
+- Adopt the shared Editor 1.7 workspace presentation: neutral surfaces, readable typography, consistent actions and aligned controls.
+- Preserve package workflows and native serialized editing; this is an editor-only presentation update.
+
+## [1.2.3] - 2026-09-09
+
+- Register package tooling and navigation actions as shared Control Center pages. Preserve the domain workflow while using Editor-owned submenus, in-window navigation, and UI scaling.
+
+## [1.2.2] - 2026-09-09
+
+### Fixed
+
+- Require Simultria API 1.1.1, the reconciled central-directory routing release,
+  instead of allowing the other 1.1.0 contract introduced on develop.
+- Preserve exact version lookup, explicit missing-record fallback, immutable
+  environment activation, and connection startup status without runtime changes.
+- Separate pure environment-option construction from the stateful development
+  window, preserving its compatibility methods and fixed-directory label while
+  reducing the window's responsibility size under the shared architecture gate.
+
+## [1.2.1] - 2026-09-08
+
+### Added
+
+- Expose instance-owned, replayable immutable connection-gate startup status
+  with bounded phases/failure codes and only allowlisted environment IDs.
+- Provide an explicit startup-behaviour ownership check for optional adapters,
+  without introducing a Template Viewer or WebGL dependency.
+
+### Fixed
+
+- Contain resolver/provider factory, registration, and activation failures so
+  early startup failures remain visible while the viewer stays disabled.
+- Prevent cancelled/disposed gates from reopening on late lookup completion;
+  isolate status observer failures and release subscriptions on disposal.
+- Retain exact version lookup, immutable environment activation, and stamped
+  build-profile fallback rules unchanged.
+
+## [1.2.0] - 2026-09-08
+
+- Compiled Development context omits Editor environment selection and defers to
+  the runtime version/profile gate. Both Manual and Automatic Editor contexts
+  can supply model IDs without a build-time lookup. Explicit local-harness
+  exports retain their environment and mismatch protection.
+
+### Changed
+
+- Use Simultria API's fixed central Production version directory independently
+  of all runtime backend and Editor environment settings. Legacy directory
+  selectors remain obsolete no-ops and no longer serialize or appear in assets.
+- Retain Editor manual environment selection; exact player version records
+  remain authoritative. Only an explicitly missing record may fall back to the
+  selected build profile's captured environment, never another active version.
+- Capture that fallback in the built scene copy without modifying source scenes,
+  configuration assets, or Editor Play Mode. Old builds require a full rebuild.
+- Expose fallback provenance while retaining one immutable environment/session
+  binding. Other lookup failures remain failures; admin runtime overrides and
+  backend/server rollout are separate work.
+- Require Simultria API 1.1.0 and add central-lookup, fallback, migration, and
+  scene-stamping regression tests.
+
 ## [1.1.1] - 2026-09-02
 
 ### Fixed

@@ -233,7 +233,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         }
 
         [Test]
-        public void ConfigurationRequiresProductDirectoryPromotionsAndSource()
+        public void ConfigurationRequiresProductPromotionsAndSourceNotDirectory()
         {
             ApiConnectionSettings connection =
                 SimultriaViewerBuildTestFactory.CreateConnection(
@@ -266,14 +266,14 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 Has.Some.Contains("at least one product"));
             Assert.That(
                 result.Issues,
-                Has.Some.Contains("build-directory environment"));
+                Has.None.Contains("build-directory environment"));
             Assert.That(
                 result.Issues,
                 Has.Some.Contains("Every promotable"));
         }
 
         [Test]
-        public void DevelopmentAcceptsConfiguredLocalAndRejectsAutomatic()
+        public void DevelopmentAcceptsManualAndAutomaticEditorProfiles()
         {
             ApiConnectionSettings connection = CreateConnection();
             SimultriaViewerBuildConfiguration configuration =
@@ -306,12 +306,11 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     .AutomaticFromUnityBuildVersion;
             DeucarianBuildValidationResult automatic =
                 contributor.ValidateBeforeBuild(request);
-            Assert.That(automatic.IsValid, Is.False);
-            Assert.That(automatic.Issues, Has.Some.Contains("Manual"));
+            Assert.That(automatic.IsValid, Is.True, automatic.Format("build context"));
         }
 
         [Test]
-        public void DevelopmentRejectsBlankOrUnconfiguredLocal()
+        public void DevelopmentIgnoresBlankOrUnconfiguredEditorLocalSelection()
         {
             ApiConnectionSettings configured = CreateConnection();
             SimultriaViewerBuildConfiguration configuredBuild =
@@ -334,7 +333,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                         Snapshot(configuredBuild, configured),
                         blank)
                     .ValidateBeforeBuild(request).IsValid,
-                Is.False);
+                Is.True);
 
             ApiConnectionSettings withoutLocal =
                 SimultriaViewerBuildTestFactory.CreateConnection(
@@ -354,8 +353,26 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     Snapshot(unconfiguredBuild, withoutLocal),
                     unconfigured)
                 .ValidateBeforeBuild(request);
-            Assert.That(result.IsValid, Is.False);
-            Assert.That(result.Issues, Has.Some.Contains("resolved"));
+            Assert.That(result.IsValid, Is.True, result.Format("build context"));
+        }
+
+        [TestCase(0, true)]
+        [TestCase(1, true)]
+        [TestCase(-1, false)]
+        [TestCase(99, false)]
+        public void ValidatesLookupSelectionIndependentlyOfBuildEnvironment(int lookup, bool valid)
+        {
+            var connection = CreateConnection();
+            var configuration = SimultriaViewerBuildTestFactory.CreateConfiguration(ownedObjects, connection);
+            configuration.LookupEnvironment = (SimultriaUnityBuildLookupEnvironment)lookup;
+            var result = CreateContributor(Snapshot(configuration, connection), null)
+                .ValidateBeforeBuild(new DeucarianBuildRequest
+                {
+                    Environment = DeucarianBuildEnvironment.Production
+                });
+            Assert.That(result.IsValid, Is.EqualTo(valid), result.Format("lookup"));
+            if (!valid)
+                Assert.That(result.Issues, Has.Some.Contains("version lookup environment"));
         }
 
         private ApiConnectionSettings CreateConnection() =>
@@ -460,8 +477,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         {
             public IDisposable Prepare(
                 DeucarianBuildEnvironment environment,
-                SimultriaViewerDevelopmentContext profile,
-                ApiEnvironmentId effectiveEnvironmentId) =>
+                SimultriaViewerDevelopmentContext profile) =>
                 new EmptyScope();
         }
 

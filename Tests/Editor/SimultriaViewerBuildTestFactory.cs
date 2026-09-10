@@ -126,6 +126,17 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 SimultriaViewerInitializationCommand.Create(payload));
         }
 
+        internal static string CreateBuildContextJson()
+        {
+            var payload = new SimultriaViewerInitializationPayload
+            {
+                Revision = 1, ProjectId = 12, ModelId = 34,
+                ForceShowLoadedModelObjects = true
+            };
+            return SimultriaViewerInitializationCommand.Serialize(
+                SimultriaViewerInitializationCommand.Create(payload));
+        }
+
         private static bool Contains(
             IReadOnlyList<ApiEnvironmentId> values,
             ApiEnvironmentId candidate)
