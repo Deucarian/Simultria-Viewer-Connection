@@ -84,7 +84,6 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         {
             return Evaluate(
                 request,
-                out _,
                 out _);
         }
 
@@ -92,8 +91,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         {
             DeucarianBuildValidationResult validation = Evaluate(
                 request,
-                out SimultriaViewerDevelopmentContext profile,
-                out ApiEnvironmentId effectiveEnvironmentId);
+                out SimultriaViewerDevelopmentContext profile);
             if (!validation.IsValid)
             {
                 throw new BuildFailedException(
@@ -103,8 +101,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
             return preparation.Prepare(
                 request.Environment,
-                profile,
-                effectiveEnvironmentId);
+                profile);
         }
 
         public DeucarianBuildValidationResult ValidateGeneratedArtifacts(
@@ -119,11 +116,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
         private DeucarianBuildValidationResult Evaluate(
             DeucarianBuildRequest request,
-            out SimultriaViewerDevelopmentContext developmentProfile,
-            out ApiEnvironmentId developmentEnvironment)
+            out SimultriaViewerDevelopmentContext developmentProfile)
         {
             developmentProfile = null;
-            developmentEnvironment = default(ApiEnvironmentId);
             var result = new DeucarianBuildValidationResult();
             if (!sceneInspector.TryInspect(
                     request,
@@ -173,7 +168,6 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ValidateDevelopmentContext(
                 configuration,
                 out developmentProfile,
-                out developmentEnvironment,
                 result);
             return result;
         }
@@ -183,6 +177,13 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             SimultriaViewerBuildConfiguration configuration,
             DeucarianBuildValidationResult result)
         {
+            if (!SimultriaUnityBuildDirectory.TryGetBaseUrl(
+                    configuration.LookupEnvironment, out _))
+            {
+                result.Add("Choose a supported version lookup environment " +
+                           "in the Simultria viewer build configuration.");
+            }
+
             if (string.IsNullOrWhiteSpace(configuration.Product))
             {
                 result.Add(
@@ -230,16 +231,6 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 return;
             }
 
-            ApiEnvironmentId directory =
-                configuration.BuildDirectoryEnvironmentId;
-            if (directory.IsEmpty ||
-                !composition.GetEnvironmentStatus(directory).IsResolved)
-            {
-                result.Add(
-                    "The Simultria viewer build-directory environment must be " +
-                    "explicit and resolved.");
-            }
-
             for (int index = 0; index < PromotableEnvironments.Length; index++)
             {
                 if (!composition.GetEnvironmentStatus(
@@ -256,11 +247,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         private void ValidateDevelopmentContext(
             SimultriaViewerBuildConfiguration configuration,
             out SimultriaViewerDevelopmentContext profile,
-            out ApiEnvironmentId environment,
             DeucarianBuildValidationResult result)
         {
             profile = null;
-            environment = default(ApiEnvironmentId);
             if (!contextSelector(out profile, out _, out _) || profile == null)
             {
                 result.Add(
@@ -279,34 +268,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 return;
             }
 
-            if (profile.EnvironmentResolutionMode !=
-                SimultriaViewerEnvironmentResolutionMode.Manual)
-            {
-                result.Add(
-                    "Development builds require an explicit Manual environment; " +
-                    "Automatic environment resolution is not available during " +
-                    "synchronous build preparation.");
-                return;
-            }
-
-            environment = profile.ConfiguredEnvironmentId;
-            if (environment.IsEmpty ||
-                !configuration.TryCreateComposition(
-                    out ApiComposition composition,
-                    out _) ||
-                !composition.GetEnvironmentStatus(environment).IsResolved)
-            {
-                result.Add(
-                    "The selected Manual development environment must be " +
-                    "explicit and resolved.");
-                return;
-            }
-
-            if (!profile.TryCreatePayload(
-                    1,
-                    environment,
-                    out SimultriaViewerInitializationPayload payload,
-                    out _))
+            if (!SimultriaViewerWebGlDevelopmentExporter.TryCreateBuildCommand(
+                    profile, out var command, out _))
             {
                 result.Add(
                     "The selected development context cannot create a valid " +
@@ -317,7 +280,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             try
             {
                 string json = SimultriaViewerInitializationCommand.Serialize(
-                    SimultriaViewerInitializationCommand.Create(payload));
+                    command);
                 if (!SimultriaViewerBuildContextValidator.TryValidateJson(
                         json,
                         out _))

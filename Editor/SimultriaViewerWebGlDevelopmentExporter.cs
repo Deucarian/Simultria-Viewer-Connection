@@ -32,8 +32,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
 
         /// <summary>
         /// Exports a credential-free command for an environment that was
-        /// already selected by the owning development workflow. This keeps a
-        /// local development build independent from automatic runtime routing.
+        /// already selected by the explicit Editor/local-harness workflow.
+        /// Automatic player build preparation uses TryExportForBuild instead.
         /// </summary>
         public static bool TryExport(
             SimultriaViewerDevelopmentContext profile,
@@ -50,6 +50,36 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             }
 
             return TryExport(command, out message);
+        }
+
+        internal static bool TryExportForBuild(
+            SimultriaViewerDevelopmentContext profile,
+            out string message)
+        {
+            return TryCreateBuildCommand(profile, out CommandEnvelope command, out message) &&
+                TryExport(command, out message);
+        }
+
+        internal static bool TryCreateBuildCommand(
+            SimultriaViewerDevelopmentContext profile,
+            out CommandEnvelope command,
+            out string message)
+        {
+            command = null;
+            if (profile == null)
+            {
+                message = "A Simultria viewer development context is required.";
+                return false;
+            }
+
+            long revision = Math.Max(1L, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            if (!profile.TryCreateBuildPayload(revision, out var payload, out message))
+            {
+                return false;
+            }
+
+            command = SimultriaViewerInitializationCommand.Create(payload);
+            return true;
         }
 
         internal static bool TryExport(

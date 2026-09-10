@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Deucarian.SimultriaViewerIntegration.Editor
@@ -59,21 +60,33 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         private static void StartEnvironmentResolution(
             SimultriaViewerDevelopmentContext profile)
         {
-            if (profile == null || environmentResolutionInFlight ||
-                testSuspensionCount > 0)
+            if (profile == null || testSuspensionCount > 0)
             {
                 return;
             }
 
+            _ = StartEnvironmentResolution(profile, (context, token) =>
+                SimultriaViewerEnvironmentResolver.CreateDefault().ResolveAsync(context, token));
+        }
+
+        // The editor host owns request lifetime; the supplied resolver owns transport.
+        // This also lets overlap/cancellation tests run without external requests.
+        internal static Task StartEnvironmentResolution(
+            SimultriaViewerDevelopmentContext profile,
+            Func<SimultriaViewerDevelopmentContext, CancellationToken,
+                Task<SimultriaViewerEnvironmentResolution>> resolveAsync)
+        {
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            if (resolveAsync == null) throw new ArgumentNullException(nameof(resolveAsync));
             string key = BuildEnvironmentResolutionKey(profile);
             if (ReferenceEquals(environmentResolutionProfile, profile) &&
                 string.Equals(
                     environmentResolutionKey,
                     key,
                     StringComparison.Ordinal) &&
-                environmentResolution != null)
+                (environmentResolutionInFlight || environmentResolution != null))
             {
-                return;
+                return Task.CompletedTask;
             }
 
             environmentResolutionCancellation?.Cancel();
@@ -83,23 +96,24 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             environmentResolutionKey = key;
             environmentResolution = null;
             environmentResolutionInFlight = true;
-            ResolveEnvironmentAsync(
+            return ResolveEnvironmentAsync(
                 profile,
                 key,
-                environmentResolutionCancellation.Token);
+                environmentResolutionCancellation.Token,
+                resolveAsync);
         }
 
-        private static async void ResolveEnvironmentAsync(
+        private static async Task ResolveEnvironmentAsync(
             SimultriaViewerDevelopmentContext profile,
             string key,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<SimultriaViewerDevelopmentContext, CancellationToken,
+                Task<SimultriaViewerEnvironmentResolution>> resolveAsync)
         {
             SimultriaViewerEnvironmentResolution result;
             try
             {
-                result = await SimultriaViewerEnvironmentResolver
-                    .CreateDefault()
-                    .ResolveAsync(profile, cancellationToken);
+                result = await resolveAsync(profile, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -153,7 +167,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             ScriptableObject connection = profile.EffectiveProfileReference;
             return profile.GetInstanceID() + "|" +
                    (int)profile.EnvironmentResolutionMode + "|" +
-                   profile.BuildDirectoryEnvironmentId.Value + "|" +
+                   (int)profile.LookupEnvironment + "|" +
                    profile.BuildProduct + "|" +
                    profile.BuildVersionOverride + "|" +
                    Application.version + "|" +

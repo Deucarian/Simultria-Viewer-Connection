@@ -18,6 +18,10 @@ generic viewer UI, or a viewer application bootstrap.
 
 ## Invariants
 
+- Version lookup uses the explicit API-owned lookup enum (Production by default,
+  or Development), separately from the runtime environment assigned by the exact
+  version record. Never infer lookup selection from a runtime dropdown or build
+  profile, revive ignored legacy directory fields, or silently retry another host.
 - Development profiles never serialize tokens, credentials, API base URLs, or
   authentication routes.
 - Metadata containing secret-like keys is rejected before command creation or

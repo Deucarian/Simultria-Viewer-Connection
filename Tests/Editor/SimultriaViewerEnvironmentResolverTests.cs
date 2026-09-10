@@ -18,7 +18,7 @@ using UnityEngine;
 
 namespace Deucarian.SimultriaViewerIntegration.Tests
 {
-    public sealed class SimultriaViewerEnvironmentResolverTests
+    public sealed partial class SimultriaViewerEnvironmentResolverTests
     {
         private readonly List<UnityEngine.Object> ownedObjects =
             new List<UnityEngine.Object>();
@@ -443,7 +443,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             Assert.That(result.Product, Is.EqualTo("report_viewer"));
             Assert.That(
                 result.Source,
-                Is.EqualTo("Simultria Unity build directory"));
+                Is.EqualTo("Central Production Unity build directory"));
             Assert.That(client.RequestCount, Is.EqualTo(1));
             Assert.That(
                 client.LastEndpoint.Path,
@@ -534,24 +534,23 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
         }
 
         [Test]
-        public async Task MissingDirectoryEnvironmentNeverDefaultsToProduction()
+        public async Task LegacyEmptyDirectoryDoesNotPreventCentralLookup()
         {
             ConfigureAutomaticProfile();
             profile.BuildDirectoryEnvironmentId = default(ApiEnvironmentId);
             var client = BuildDirectoryClient.Success(
                 "build-42",
                 "report_viewer",
-                "production");
+                "testing");
 
             SimultriaViewerEnvironmentResolution result =
                 await CreateResolver(client, "unused").ResolveAsync(profile);
 
-            Assert.That(result.Succeeded, Is.False);
-            Assert.That(
-                result.ErrorCode,
-                Is.EqualTo("build_directory_environment_missing"));
-            Assert.That(result.EnvironmentId.IsEmpty, Is.True);
-            Assert.That(client.RequestCount, Is.Zero);
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(result.EnvironmentId, Is.EqualTo(SimultriaEnvironmentIds.Testing));
+            Assert.That(client.RequestCount, Is.EqualTo(1));
+            Assert.That(client.LastEndpoint.Path,
+                Does.StartWith("https://buildingvirtualitysuite.com/"));
         }
 
         [TestCase("deprecated", "build_environment_unknown")]
@@ -897,7 +896,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
             {
             }
 
-            private BuildDirectoryClient(
+            internal BuildDirectoryClient(
                 ApiResult<SimultriaResourceResponse<
                     SimultriaUnityBuildVersionDto>> result)
             {

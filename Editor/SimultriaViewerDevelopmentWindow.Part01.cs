@@ -19,9 +19,10 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         public static void Open()
         {
             SimultriaViewerDevelopmentWindow window =
-                GetWindow<SimultriaViewerDevelopmentWindow>(
+                DeucarianEditorWindowPages.GetStandalone<SimultriaViewerDevelopmentWindow>(
                     "Simultria Viewer Development");
             window.minSize = CompactMinimumSize;
+            window.Show();
             window.Focus();
         }
 
@@ -43,6 +44,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
             operationCancellation = null;
         }
 
+        public static IDeucarianEditorPage CreatePage() =>
+            DeucarianEditorImGuiPage.Create<SimultriaViewerDevelopmentWindow>(DeucarianToolIds.SimultriaViewerDevelopment, window => window.OnGUI());
+
         private void OnGUI()
         {
             DeucarianEditorWindowChrome.DrawImGuiWindowBackground(
@@ -61,7 +65,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                         "VIEWER DEVELOPMENT");
                     DrawReadiness();
                     DrawDevelopmentContext();
-                    showAdvanced = EditorGUILayout.Foldout(
+                    showAdvanced = DeucarianEditorInputGUI.Foldout(
                         showAdvanced,
                         "Advanced",
                         true);
@@ -226,8 +230,8 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField(label, GUILayout.Width(112f));
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(label, GUILayout.Width(112f));
+                DeucarianEditorTextGUI.LabelField(
                     string.IsNullOrWhiteSpace(value) ? "-" : value,
                     GUILayout.ExpandWidth(true));
                 DeucarianEditorStatusBadge.Draw(
@@ -248,7 +252,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                 "Development context",
                 () =>
                 {
-                    useOverride = EditorGUILayout.Toggle(
+                    useOverride = DeucarianEditorInputGUI.Toggle(
                         "Use local override",
                         user.UseLocalProfileOverride);
                     if (useOverride != user.UseLocalProfileOverride)
@@ -265,7 +269,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                         : project.DefaultProfile;
                     SimultriaViewerDevelopmentContext context =
                         (SimultriaViewerDevelopmentContext)
-                        EditorGUILayout.ObjectField(
+                        DeucarianEditorInputGUI.ObjectField(
                             "Context",
                             selected,
                             typeof(SimultriaViewerDevelopmentContext),
@@ -290,12 +294,12 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     }
                     else
                     {
-                        EditorGUILayout.HelpBox(
+                        DeucarianEditorTextGUI.HelpBox(
                             "Choose or create a development context.",
                             MessageType.Info);
                     }
 
-                    bool autoLoad = EditorGUILayout.Toggle(
+                    bool autoLoad = DeucarianEditorInputGUI.Toggle(
                         "Auto-load on Play",
                         project.AutoLoadInPlayMode);
                     if (autoLoad != project.AutoLoadInPlayMode)
@@ -336,9 +340,9 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     out _);
             DeucarianEditorCards.DrawCard("Local WebGL export", () =>
             {
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(
                     "Optional credential-free export for a local WebGL harness.",
-                    EditorStyles.wordWrappedMiniLabel);
+                    DeucarianEditorWorkbenchGUI.WordWrappedMiniLabelStyle);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (DeucarianEditorButtons.Secondary(

@@ -37,7 +37,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     Id,
                     "No secure local credential-store implementation is " +
                     "available for this Editor platform.",
-                    openSetup: OpenAuthentication));
+                    openSetup: OpenAuthentication, setupToolId: DeucarianToolIds.Authentication));
             }
 
             bool hasBinding = ApiConnectionProjectSettings.instance.TryResolve(
@@ -61,7 +61,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     Id,
                     bindingError ?? "The Simultria API connection is invalid.",
                     "ProjectSettings/DeucarianApiConnections.asset",
-                    openSetup: OpenApiConnections));
+                    openSetup: OpenApiConnections, setupToolId: DeucarianToolIds.ApiConnections));
             }
 
             if (!SimultriaViewerDevelopmentContextSelector.TryResolve(
@@ -76,7 +76,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     contextError ??
                         "A Simultria viewer development context is required.",
                     source,
-                    openSetup: SimultriaViewerDevelopmentWindow.Open));
+                    openSetup: SimultriaViewerDevelopmentWindow.Open, setupToolId: DeucarianToolIds.SimultriaViewerDevelopment));
                 return;
             }
 
@@ -98,7 +98,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     "Simultria API connection settings asset.",
                     AssetDatabase.GetAssetPath(context),
                     select: selectContext,
-                    openSetup: OpenApiConnections));
+                    openSetup: OpenApiConnections, setupToolId: DeucarianToolIds.ApiConnections));
             }
 
             if (TryGetManualEnvironmentError(context, out string error))
@@ -110,7 +110,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     error,
                     AssetDatabase.GetAssetPath(context),
                     select: selectContext,
-                    openSetup: OpenApiConnections));
+                    openSetup: OpenApiConnections, setupToolId: DeucarianToolIds.ApiConnections));
             }
 
             if (context.ProjectId <= 0 || context.ModelId <= 0)
@@ -123,7 +123,7 @@ namespace Deucarian.SimultriaViewerIntegration.Editor
                     "development can start.",
                     AssetDatabase.GetAssetPath(context),
                     select: selectContext,
-                    openSetup: SimultriaViewerDevelopmentWindow.Open));
+                    openSetup: SimultriaViewerDevelopmentWindow.Open, setupToolId: DeucarianToolIds.SimultriaViewerDevelopment));
             }
         }
 
