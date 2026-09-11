@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.1] - 2026-09-11
+
+- Present viewer context, readiness and development actions in a native workspace; preserve environment checks, conflict detection and existing operations.
+- Require Editor 1.10.6 for the shared native controls, typography, responsive layouts and accessible interaction states.
+
 ## [1.3.0] - 2026-09-10
 
 ### Added
