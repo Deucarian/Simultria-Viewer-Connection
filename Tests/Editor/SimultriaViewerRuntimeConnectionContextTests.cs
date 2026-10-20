@@ -5,6 +5,7 @@ using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
 using Deucarian.Simultria.API.Configuration;
+using Deucarian.Simultria.API;
 using Deucarian.SimultriaViewerIntegration.Editor;
 using Deucarian.Authentication;
 using NUnit.Framework;
@@ -12,7 +13,7 @@ using UnityEngine;
 
 namespace Deucarian.SimultriaViewerIntegration.Tests
 {
-    public sealed class SimultriaViewerRuntimeConnectionContextTests
+    public sealed partial class SimultriaViewerRuntimeConnectionContextTests
     {
         private readonly List<UnityEngine.Object> ownedObjects =
             new List<UnityEngine.Object>();
@@ -67,6 +68,8 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     context.EnvironmentId,
                     Is.EqualTo(SimultriaEnvironmentIds.Development));
                 Assert.That(context.ApiClient, Is.SameAs(connection.ApiClient));
+                Assert.That(context.Api, Is.Not.Null);
+                Assert.That(context.Api.EnvironmentId, Is.EqualTo(context.EnvironmentId));
                 Assert.That(context.Composition, Is.Not.Null);
                 Assert.That(
                     context.PrimaryClient.ClientId,
@@ -265,6 +268,9 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                     Is.True);
                 Assert.That(current, Is.SameAs(second));
                 Assert.That(current, Is.Not.SameAs(first));
+                Assert.That(second.Api, Is.Not.SameAs(first.Api));
+                Assert.Throws<OperationCanceledException>(() => first.Api.ModelVersions.GetActivitiesAsync(1));
+                Assert.That(second.Api.EnvironmentId, Is.EqualTo(inputs.EnvironmentId));
             }
             finally
             {
@@ -305,6 +311,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 Assert.That(plan.Succeeded, Is.True, plan.Message);
                 Assert.That(plan.Composition, Is.SameAs(inputs.Composition));
                 Assert.That(plan.ApiClient, Is.SameAs(inputs.ApiClient));
+                Assert.That(plan.Api, Is.SameAs(context.Api));
                 Assert.That(
                     plan.PrimaryClient,
                     Is.SameAs(inputs.PrimaryClient));
@@ -354,7 +361,44 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 Is.False);
         }
 
-        private RuntimeInputs CreateInputs(ApiEnvironmentId environmentId)
+        [Test]
+        public void ReleasedConnectionRejectsCallsBeforeTransportDispatch()
+        {
+            RuntimeInputs inputs = CreateInputs(SimultriaEnvironmentIds.Development);
+            Assert.That(TryActivate(inputs, out SimultriaViewerRuntimeConnectionContext context,
+                                    out IDisposable registration, out string error), Is.True, error);
+            SimultriaApi api = context.Api;
+            registration.Dispose();
+            Assert.Throws<OperationCanceledException>(() => api.ModelVersions.GetActivitiesAsync(1));
+            Assert.That(SimultriaViewerRuntimeConnectionContext.TryGetCurrent(out _), Is.False);
+        }
+
+        [Test]
+        public void ComponentLifetimeBindingRetainsInjectedEnvironmentAndCancelsOnDestruction()
+        {
+            RuntimeInputs inputs = CreateInputs(SimultriaEnvironmentIds.Development);
+            Assert.That(TryActivate(inputs, out SimultriaViewerRuntimeConnectionContext context,
+                                    out IDisposable registration, out string error), Is.True, error);
+            GameObject owner = new GameObject("API owner lifetime test");
+            ApiOwner component = owner.AddComponent<ApiOwner>();
+            try
+            {
+                SimultriaApi scoped = context.Api.For(component);
+                Assert.That(scoped.EnvironmentId, Is.EqualTo(context.EnvironmentId));
+                UnityEngine.Object.DestroyImmediate(owner);
+                Assert.Throws<OperationCanceledException>(() => scoped.ModelVersions.GetActivitiesAsync(1));
+            }
+            finally
+            {
+                if (owner != null) UnityEngine.Object.DestroyImmediate(owner);
+                registration.Dispose();
+            }
+        }
+
+        [ExecuteAlways]
+        private sealed class ApiOwner : MonoBehaviour { }
+
+        private RuntimeInputs CreateInputs(ApiEnvironmentId environmentId, IApiClient apiClient = null)
         {
             ApiComposition composition = CreateComposition(environmentId);
             Assert.That(
@@ -369,7 +413,7 @@ namespace Deucarian.SimultriaViewerIntegration.Tests
                 environmentId,
                 primaryClient,
                 composition,
-                CreateApiClient());
+                apiClient ?? CreateApiClient());
         }
 
         private static bool TryActivate(

@@ -1,6 +1,8 @@
 using System;
+using System.Threading;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API;
 using Deucarian.Simultria.API.Configuration;
 using UnityEngine;
 
@@ -16,6 +18,8 @@ namespace Deucarian.SimultriaViewerIntegration
     {
         private static readonly object Gate = new object();
         private static SimultriaViewerRuntimeConnectionContext current;
+        private readonly CancellationTokenSource _apiLifetime = new CancellationTokenSource();
+        private int _released;
 
         private SimultriaViewerRuntimeConnectionContext(
             ApiEnvironmentId environmentId,
@@ -27,6 +31,7 @@ namespace Deucarian.SimultriaViewerIntegration
             PrimaryClient = primaryClient;
             Composition = composition;
             ApiClient = apiClient;
+            Api = new SimultriaApi(apiClient, composition, environmentId, _apiLifetime.Token);
         }
 
         /// <summary>The exact environment selected for this lease.</summary>
@@ -43,6 +48,12 @@ namespace Deucarian.SimultriaViewerIntegration
         /// must not dispose or replace it.
         /// </summary>
         public IApiClient ApiClient { get; }
+
+        /// <summary>
+        /// Connection-owned typed API for constructor injection. Pending operations are canceled when this lease ends.
+        /// This instance stays pinned to this connection and never follows a replacement environment.
+        /// </summary>
+        public SimultriaApi Api { get; }
 
         /// <summary>
         /// Returns the context carried by the current runtime connection
@@ -88,6 +99,7 @@ namespace Deucarian.SimultriaViewerIntegration
             {
                 if (current != null)
                 {
+                    candidate.ReleaseApi();
                     error = "A Simultria runtime connection context is " +
                             "already active.";
                     return false;
@@ -227,12 +239,28 @@ namespace Deucarian.SimultriaViewerIntegration
         internal static void ResetForLifecycle(
             SimultriaViewerRuntimeConnectionContext owner = null)
         {
+            SimultriaViewerRuntimeConnectionContext released = owner;
             lock (Gate)
             {
                 if (owner == null || ReferenceEquals(current, owner))
                 {
+                    released = current ?? owner;
                     current = null;
                 }
+            }
+            released?.ReleaseApi();
+        }
+
+        private void ReleaseApi()
+        {
+            if (Interlocked.Exchange(ref _released, 1) != 0) return;
+            try
+            {
+                _apiLifetime.Cancel();
+            }
+            finally
+            {
+                _apiLifetime.Dispose();
             }
         }
 
@@ -240,10 +268,7 @@ namespace Deucarian.SimultriaViewerIntegration
             RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetForRuntime()
         {
-            lock (Gate)
-            {
-                current = null;
-            }
+            ResetForLifecycle();
         }
 
         private sealed class Registration : IDisposable
