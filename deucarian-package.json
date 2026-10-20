@@ -29,5 +29,12 @@
   "optionalVersionDefinedDependencies": [],
   "allowedDirectDebugCalls": [],
   "allowedDirectUnityObjectLifetimeCalls": [],
-  "expectedSamplesRoot": ""
+  "expectedSamplesRoot": "",
+  "preservedDocumentation": {
+    "version": "1.3.1",
+    "sha256": {
+      "README.md": "f592a2d26cb69e7723c62d192e60b981aa3036ddb038bf58e2d523794eff98b1",
+      "CHANGELOG.md": "63b3fae49a68e06d36f469dbb1336392a19b601442490adf81343b74099ebefe"
+    }
+  }
 }

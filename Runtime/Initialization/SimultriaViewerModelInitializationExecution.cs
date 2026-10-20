@@ -5,6 +5,7 @@ using Deucarian.API.Authentication;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API;
 using Newtonsoft.Json.Linq;
 
 namespace Deucarian.SimultriaViewerIntegration
@@ -21,6 +22,7 @@ namespace Deucarian.SimultriaViewerIntegration
             ApiResolvedClient primaryClient,
             ApiComposition composition,
             IApiClient apiClient,
+            SimultriaApi api,
             SimultriaViewerModelInitializationResolution resolution)
         {
             InitializationPayload = initializationPayload;
@@ -28,6 +30,7 @@ namespace Deucarian.SimultriaViewerIntegration
             PrimaryClient = primaryClient;
             Composition = composition;
             ApiClient = apiClient;
+            Api = api;
             Resolution = resolution;
         }
 
@@ -44,6 +47,7 @@ namespace Deucarian.SimultriaViewerIntegration
         public ApiResolvedClient PrimaryClient { get; }
         public ApiComposition Composition { get; }
         public IApiClient ApiClient { get; }
+        public SimultriaApi Api { get; }
         public SimultriaViewerModelInitializationResolution Resolution
         {
             get;
@@ -251,6 +255,7 @@ namespace Deucarian.SimultriaViewerIntegration
                         plan.PrimaryClient,
                         plan.Composition,
                         plan.ApiClient,
+                        plan.Api,
                         resolution);
                 if (!plan.TryValidateRuntimeConnection(out
                         SimultriaViewerModelInitializationResolution

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API;
 
 namespace Deucarian.SimultriaViewerIntegration
 {
@@ -27,7 +28,8 @@ namespace Deucarian.SimultriaViewerIntegration
             ApiComposition composition,
             IApiClient apiClient,
             SimultriaViewerModelInitializationResolver resolver,
-            SimultriaViewerRuntimeConnectionContext owningRuntimeConnection)
+            SimultriaViewerRuntimeConnectionContext owningRuntimeConnection,
+            SimultriaApi api)
         {
             Succeeded = succeeded;
             ErrorCode = errorCode ?? string.Empty;
@@ -39,6 +41,10 @@ namespace Deucarian.SimultriaViewerIntegration
             ApiClient = apiClient;
             Resolver = resolver;
             runtimeConnection = owningRuntimeConnection;
+            if (succeeded)
+            {
+                Api = api ?? owningRuntimeConnection?.Api ?? new SimultriaApi(apiClient, composition, environmentId);
+            }
         }
 
         public bool Succeeded { get; }
@@ -54,6 +60,8 @@ namespace Deucarian.SimultriaViewerIntegration
         public ApiComposition Composition { get; }
 
         public IApiClient ApiClient { get; }
+
+        public SimultriaApi Api { get; }
 
         public SimultriaViewerModelInitializationResolver Resolver { get; }
 
@@ -112,7 +120,8 @@ namespace Deucarian.SimultriaViewerIntegration
             ApiComposition composition,
             IApiClient apiClient,
             SimultriaViewerModelInitializationResolver resolver,
-            SimultriaViewerRuntimeConnectionContext runtimeConnection = null) =>
+            SimultriaViewerRuntimeConnectionContext runtimeConnection = null,
+            SimultriaApi api = null) =>
             new SimultriaViewerModelInitializationPlan(
                 true,
                 string.Empty,
@@ -123,7 +132,8 @@ namespace Deucarian.SimultriaViewerIntegration
                 composition,
                 apiClient,
                 resolver,
-                runtimeConnection);
+                runtimeConnection,
+                api);
 
         internal static SimultriaViewerModelInitializationPlan Failure(
             string errorCode,
@@ -134,6 +144,7 @@ namespace Deucarian.SimultriaViewerIntegration
                 message,
                 null,
                 default,
+                null,
                 null,
                 null,
                 null,
