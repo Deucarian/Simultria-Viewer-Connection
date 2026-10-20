@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.0] - Upstream synchronization
+
+- Synchronize package version 1.5.0 from [upstream commit `0434f5e36a9022bd6e0707b0d817792e563a1c7f`](https://bitbucket.org/simultria/simultria-viewer-connection/commits/0434f5e36a9022bd6e0707b0d817792e563a1c7f).
+
 ## [1.3.1] - 2026-09-11
 
 - Present viewer context, readiness and development actions in a native workspace; preserve environment checks, conflict detection and existing operations.

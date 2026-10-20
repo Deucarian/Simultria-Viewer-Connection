@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API;
 using Deucarian.Simultria.API.Models;
 using Deucarian.Simultria.API.Services;
 
@@ -82,18 +83,17 @@ namespace Deucarian.SimultriaViewerIntegration
             CancellationToken,
             Task<SimultriaViewerModelResolveResult>> resolve;
 
-        public SimultriaViewerModelInitializationResolver(
-            IApiClient apiClient,
-            ApiComposition composition,
-            ApiEnvironmentId environmentId)
+        public SimultriaViewerModelInitializationResolver(SimultriaApi api)
         {
-            var resolver = new SimultriaViewerModelResolver(
-                apiClient ?? throw new ArgumentNullException(nameof(apiClient)),
-                composition ??
-                    throw new ArgumentNullException(nameof(composition)),
-                environmentId);
+            SimultriaViewerModelResolver resolver = new SimultriaViewerModelResolver(api);
+            // Model readiness requires the async result, including its domain failure code.
             resolve = resolver.ResolveAsync;
         }
+
+        public SimultriaViewerModelInitializationResolver(IApiClient apiClient,
+                                                         ApiComposition composition,
+                                                         ApiEnvironmentId environmentId)
+            : this(new SimultriaApi(apiClient, composition, environmentId)) { }
 
         internal SimultriaViewerModelInitializationResolver(
             Func<

@@ -3,6 +3,7 @@ using Deucarian.API.Authentication;
 using Deucarian.API.Configuration;
 using Deucarian.API.Core;
 using Deucarian.API.Models;
+using Deucarian.Simultria.API;
 using Deucarian.Simultria.API.Configuration;
 
 namespace Deucarian.SimultriaViewerIntegration
@@ -25,14 +26,8 @@ namespace Deucarian.SimultriaViewerIntegration
             SimultriaViewerModelInitializationResolver> createResolver;
 
         public SimultriaViewerModelInitializationCoordinator()
-            : this(
-                ApiClientFactory.Create,
-                (client, composition, environment) =>
-                    new SimultriaViewerModelInitializationResolver(
-                        client,
-                        composition,
-                        environment))
         {
+            createClient = ApiClientFactory.Create;
         }
 
         internal SimultriaViewerModelInitializationCoordinator(
@@ -231,11 +226,10 @@ namespace Deucarian.SimultriaViewerIntegration
 
             try
             {
-                SimultriaViewerModelInitializationResolver resolver =
-                    createResolver(
-                        apiClient,
-                        composition,
-                        environmentId);
+                SimultriaApi api = runtimeConnection?.Api ?? new SimultriaApi(apiClient, composition, environmentId);
+                SimultriaViewerModelInitializationResolver resolver = createResolver == null
+                    ? new SimultriaViewerModelInitializationResolver(api)
+                    : createResolver(apiClient, composition, environmentId);
                 if (resolver == null)
                 {
                     return Failure(
@@ -250,7 +244,8 @@ namespace Deucarian.SimultriaViewerIntegration
                     composition,
                     apiClient,
                     resolver,
-                    runtimeConnection);
+                    runtimeConnection,
+                    api);
             }
             catch (Exception)
             {
